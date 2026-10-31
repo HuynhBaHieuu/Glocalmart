@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Tạo phiếu nhập kho{% endblock %}
+{% block content %}
+{{ products|json_script:"products-data" }}
+{{ old|json_script:"old-data" }}
+<div x-data="phieuNhap()" x-init="init()">
+  <div class="mb-5 flex items-center gap-3">
+    <a href="{% url 'nhap' %}" class="grid h-8 w-8 place-items-center rounded-full border bg-white hover:bg-gray-50"><i data-lucide="chevron-left" class="h-4 w-4"></i></a>
+    <div>
+      <nav class="text-[11.5px] text-gray-400">Nhập kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">Tạo phiếu nhập kho</span></nav>
+      <h1 class="text-[20px] font-semibold text-gray-900">Tạo phiếu nhập kho</h1>
+    </div>
+  </div>
+
+  <form method="post" x-ref="form" @submit.prevent="openPreview()" class="grid gap-5 xl:grid-cols-[1fr_320px]">
+    {% csrf_token %}
+    <div class="card space-y-4 p-5">
+      <div class="flex items-start justify-between rounded-xl bg-gray-50 p-4">
+        <div><h3 class="text-[15px] font-semibold">Thông tin phiếu nhập</h3><p class="text-[12px] text-gray-500">Điền đầy đủ thông tin để tạo phiếu nhập kho mới.</p></div>
+        <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-600"><span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>Chờ giao</span>
+      </div>
+
+      <div class="grid gap-4 rounded-xl bg-gray-50 p-4 sm:grid-cols-3">
+        <div>
+          <label class="label">Mã phiếu nhập *</label>
+          <div class="relative"><input class="input" value="{{ ma_du_kien }}" readonly><span class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Tự động</span></div>
+        </div>
+        <div>
+          <label class="label">Ngày tạo phiếu *</label>
+          <input class="input" value="{{ today|d }}" readonly>
+        </div>
+        <div>
+          <label class="label">Ngày dự kiến nhận</label>
+          <input type="date" name="ngay_du_kien_nhan" x-model="ngay" min="{{ today|iso }}" class="input">
+        </div>
+      </div>
+
+      <div class="rounded-xl bg-gray-50 p-4">
+        <label class="label">Nhà cung cấp *</label>
+        <select name="ncc" x-model="ncc" required class="input" :class="ncc && '!border-brand-600 ring-2 ring-brand-600/20'">
+          <option value="">— Chọn nhà cung cấp —</option>
+          {% for n in ncc_list %}<option value="{{ n.pk }}">{{ n.ma_ncc }} · {{ n.ten_ncc }}</option>{% endfor %}
+        </select>
+        <p class="hint flex items-center gap-1" x-show="ncc"><i data-lucide="circle-check" class="h-3.5 w-3.5 text-emerald-600"></i>Đã chọn nhà cung cấp.</p>
+      </div>
+
+      <div class="rounded-xl bg-gray-50 p-4">
+        <label class="label">Ghi chú</label>
+        <textarea name="ghi_chu" x-model="ghi_chu" rows="2" class="input" placeholder="Nhập ghi chú cho phiếu nhập kho (không bắt buộc)..."></textarea>
+      </div>
+
+      <div class="rounded-xl bg-gray-50 p-4">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div><h3 class="text-[14px] font-semibold">Danh sách sản phẩm nhập</h3><p class="text-[12px] text-gray-500">Thêm sản phẩm và nhập số lượng, đơn giá.</p></div>
+          <div class="relative w-full sm:w-80" @click.outside="search=''">
+            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+            <input x-model="search" @keydown.enter.prevent="results[0] && add(results[0])" placeholder="+ Thêm sản phẩm: gõ mã hoặc tên..." class="input pl-9">
+            <div x-show="search" class="absolute right-0 z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-xl">
+              <template x-for="p in results" :key="p.id">
+                <button type="button" @click="add(p)" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-brand-50">
+                  <span><span class="block text-[12.5px] font-medium" x-text="p.ten"></span><span class="text-[11px] text-gray-400" x-text="p.ma + ' · ' + p.dm"></span></span>
+                  <span class="text-right text-[11px] text-gray-500">Tồn <b x-text="vn(p.ton)"></b> <span x-text="p.dvt"></span></span>
+                </button>
+              </template>
+              <p x-show="!results.length" class="px-3 py-3 text-[12px] text-gray-400">Không tìm thấy sản phẩm.</p>
+            </div>
+          </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border bg-white">
+          <table class="tbl compact">
+            <thead><tr><th>Sản phẩm</th><th class="w-28 text-right">Số lượng đặt</th><th class="w-36 text-right">Đơn giá nhập (đ)</th><th class="text-right">Thành tiền (đ)</th><th class="w-10">Xóa</th></tr></thead>
+            <tbody>
+              <template x-for="(it, i) in items" :key="it.id">
+                <tr>
+                  <td>
+                    <input type="hidden" name="sp" :value="it.id">
+                    <div class="flex items-center gap-3">
+                      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-50 text-[10px] font-bold text-brand-700" x-text="it.p.dvt.slice(0,2)"></span>
+                      <span><span class="block font-medium" x-text="it.p.ten"></span><span class="text-[11px] text-gray-400" x-text="'SKU: ' + it.p.ma + ' · ĐVT: ' + it.p.dvt"></span></span>
+                    </div>
+                  </td>
+                  <td><input name="sl" type="number" min="0.001" step="any" required x-model="it.sl" class="input text-right"></td>
+                  <td><input name="gia" type="number" min="0" step="1" required x-model="it.gia" class="input text-right"></td>
+                  <td class="text-right font-semibold text-brand-700" x-text="vn(it.sl * it.gia, 0)"></td>
+                  <td><button type="button" @click="items.splice(i,1)" class="text-red-500 hover:text-red-700" title="Xóa dòng">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></button></td>
+                </tr>
+              </template>
+              <tr x-show="!items.length"><td colspan="5" class="py-8 text-center text-[12px] text-gray-400">⊕ Gõ vào ô “Thêm sản phẩm” để thêm sản phẩm vào phiếu nhập...</td></tr>
+            </tbody>
+            <tfoot x-show="items.length">
+              <tr class="bg-brand-50/50"><td class="px-3 py-3 font-semibold">Tổng cộng (<span x-text="items.length"></span> sản phẩm)</td><td class="px-3 text-right font-semibold" x-text="vn(totalQty)"></td><td></td><td class="px-3 text-right text-[15px] font-bold text-brand-800" x-text="vnd(total)"></td><td></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="card p-5">
+        <h3 class="mb-3 text-[14px] font-semibold">Hành động</h3>
+        <button class="btn btn-primary w-full" :disabled="!ncc || !items.length"><i data-lucide="eye"></i>Xem trước &amp; lưu phiếu</button>
+        <p class="mt-2 text-[11.5px] text-gray-500">Xem lại nội dung phiếu trước khi xác nhận lưu vào hệ thống.</p>
+        <a href="{% url 'nhap' %}" class="btn btn-ghost mt-3 w-full"><i data-lucide="x"></i>Hủy bỏ</a>
+      </div>
+      <div class="card border-emerald-200 bg-emerald-50/60 p-5 text-[12px] text-emerald-900">
+        <p class="mb-2 flex items-center gap-2 font-semibold"><i data-lucide="info" class="h-4 w-4"></i>Lưu ý khi tạo phiếu</p>
+        <ul class="list-disc space-y-1 pl-5">
+          <li>Phiếu nhập mới sẽ có trạng thái “Chờ giao” cho đến khi hàng được nhận.</li>
+          <li>Trạng thái giao hàng chuyển tuần tự: Chờ giao → Đang giao → Đã giao.</li>
+          <li>Số lượng tồn kho chỉ được cập nhật sau khi đối soát và xác nhận nhận hàng.</li>
+          <li>Cần chọn ít nhất một sản phẩm để lưu phiếu.</li>
+        </ul>
+      </div>
+      <div class="card p-5" x-show="items.length">
+        <p class="text-[12px] text-gray-500">Tổng giá trị phiếu</p>
+        <p class="mt-1 text-[24px] font-bold text-brand-800" x-text="vnd(total)"></p>
+        <p class="text-[11.5px] text-gray-400"><span x-text="items.length"></span> sản phẩm · <span x-text="vn(totalQty)"></span> đơn vị</p>
+      </div>
+    </div>
+
+    <!-- Modal xem trước -->
+    <div x-show="preview" x-transition.opacity x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4">
+      <div class="mx-auto my-6 w-full max-w-2xl rounded-2xl bg-white shadow-2xl" @click.outside="preview=false">
+        <div class="flex items-start justify-between border-b px-6 py-5">
+          <div><h3 class="text-[18px] font-semibold">Xem trước phiếu nhập kho</h3><p class="text-[12px] text-gray-500">Kiểm tra nội dung phiếu trước khi lưu.</p></div>
+          <button type="button" @click="preview=false" class="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+        <div class="px-6 py-5">
+          <div class="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] text-emerald-800">
+            <span>✔</span><span><b>Dữ liệu hợp lệ — sẵn sàng lưu.</b> Đơn giá dưới đây là đơn giá nhập thỏa thuận với nhà cung cấp.</span>
+          </div>
+          <div class="rounded-xl border p-5">
+            <div class="flex items-start justify-between">
+              <div><p class="text-[20px] font-bold tracking-wide text-brand-800">PHIẾU NHẬP KHO</p><p class="text-[11.5px] text-gray-500">Bản xem trước · Phiếu chưa được lưu</p></div>
+              <span class="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Chờ giao</span>
+            </div>
+            <div class="mt-4 grid grid-cols-2 gap-3 text-[12.5px]">
+              <div><p class="text-gray-500">Mã phiếu nhập</p><p class="font-semibold">{{ ma_du_kien }} <span class="font-normal text-gray-400">(cấp khi lưu)</span></p></div>
+              <div><p class="text-gray-500">Ngày tạo</p><p class="font-semibold">{{ today|d }}</p></div>
+              <div><p class="text-gray-500">Nhà cung cấp</p><p class="font-semibold" x-text="nccName()"></p></div>
+              <div><p class="text-gray-500">Ngày dự kiến nhận</p><p class="font-semibold" x-text="ngay ? ngay.split('-').reverse().join('/') : '—'"></p></div>
+              <div class="col-span-2" x-show="ghi_chu"><p class="text-gray-500">Ghi chú</p><p x-text="ghi_chu"></p></div>
+            </div>
+            <table class="tbl compact mt-4 rounded-lg border">
+              <thead><tr><th>Sản phẩm</th><th class="text-right">SL</th><th class="text-right">Đơn giá</th><th class="text-right">Thành tiền</th></tr></thead>
+              <tbody>
+                <template x-for="it in items" :key="it.id">
+                  <tr><td><span class="font-medium" x-text="it.p.ten"></span><br><span class="text-[11px] text-gray-400" x-text="it.p.ma"></span></td>
+                    <td class="text-right" x-text="vn(it.sl) + ' ' + it.p.dvt"></td><td class="text-right" x-text="vn(it.gia,0)"></td><td class="text-right font-medium" x-text="vn(it.sl*it.gia,0)"></td></tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="mt-3 flex justify-between rounded-lg bg-brand-50 px-4 py-3"><span class="font-semibold">Tổng thành tiền</span><span class="text-[16px] font-bold text-brand-800" x-text="vnd(total)"></span></div>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+          <button type="button" class="btn btn-ghost" @click="preview=false">Quay lại chỉnh sửa</button>
+          <button type="button" class="btn btn-primary" @click="$refs.form.submit()"><i data-lucide="save"></i>Xác nhận lưu phiếu</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function phieuNhap() {
+  const products = jsonData('products-data');
+  const byId = Object.fromEntries(products.map(p => [p.id, p]));
+  const nccOptions = {};
+  return {
+    ncc: '', ngay: '', ghi_chu: '', search: '', items: [], preview: false,
+    init() {
+      document.querySelectorAll('select[name=ncc] option').forEach(o => nccOptions[o.value] = o.textContent);
+      const old = jsonData('old-data');
+      if (old) {
+        this.ncc = old.ncc; this.ngay = old.ngay; this.ghi_chu = old.ghi_chu;
+        old.items.forEach(it => byId[it.id] && this.items.push({ id: it.id, p: byId[it.id], sl: it.sl, gia: it.gia }));
+      }
+      const sp = new URLSearchParams(location.search).get('sp');
+      if (sp && byId[sp]) this.add(byId[sp]);
+    },
+    get results() {
+      const q = this.search.trim().toLowerCase();
+      if (!q) return [];
+      return products.filter(p => !this.items.some(i => i.id === p.id) && (p.ten.toLowerCase().includes(q) || p.ma.toLowerCase().includes(q))).slice(0, 10);
+    },
+    add(p) {
+      if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: 1, gia: Math.round(p.gia_von) || 0 });
+      this.search = '';
+    },
+    get total() { return this.items.reduce((s, i) => s + (Number(i.sl) || 0) * (Number(i.gia) || 0), 0); },
+    get totalQty() { return this.items.reduce((s, i) => s + (Number(i.sl) || 0), 0); },
+    nccName() { return nccOptions[this.ncc] || '—'; },
+    openPreview() {
+      if (!this.$refs.form.reportValidity()) return;
+      this.preview = true;
+    },
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Báo cáo Xuất - Nhập - Tồn{% endblock %}
+{% block content %}
+<div x-data="{ exp:false, fmt:'xlsx' }">
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">Báo cáo Xuất - Nhập - Tồn <span class="text-[12px] font-normal text-gray-500">In - Out - Stock Report</span></h1>
+    <p class="mt-1 text-[13px] text-gray-500">Tra cứu tình hình biến động kho và lịch sử giao dịch chứng từ đã xác nhận trong khoảng thời gian.</p>
+  </div>
+  <button class="btn btn-primary" @click="exp=true"><i data-lucide="file-down"></i>Xuất báo cáo (Excel / PDF)</button>
+</div>
+
+<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tồn đầu kỳ</p><p class="mt-1 text-[26px] font-semibold">{{ tong.dau|qty }}</p><p class="text-[11px] text-gray-400">Tổng số lượng ban đầu</p></div><span class="stat-icon"><i data-lucide="package" class="h-4 w-4"></i></span></div>
+  <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tổng nhập trong kỳ</p><p class="mt-1 text-[26px] font-semibold text-emerald-700">+{{ tong.nhap|qty }}</p><p class="text-[11px] text-gray-400">Phiếu nhập đã xác nhận</p></div><span class="stat-icon"><i data-lucide="circle-check" class="h-4 w-4"></i></span></div>
+  <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tổng xuất trong kỳ</p><p class="mt-1 text-[26px] font-semibold text-red-600">-{{ tong.xuat|qty }}</p><p class="text-[11px] text-gray-400">Điều chỉnh KK: {{ tong.kiem|signed }}</p></div><span class="stat-icon"><i data-lucide="archive" class="h-4 w-4"></i></span></div>
+  <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tồn cuối kỳ</p><p class="mt-1 text-[26px] font-semibold">{{ tong.cuoi|qty }}</p><p class="text-[11px] text-gray-400">Giá trị: {{ tong.gia_tri|vnd }}</p></div><span class="stat-icon"><i data-lucide="layout-grid" class="h-4 w-4"></i></span></div>
+</div>
+
+<div class="card mt-5 overflow-hidden">
+  <div class="flex border-b px-5">
+    <a href="{% qs tab='mat_hang' page=None %}" class="tab {% if tab != 'giao_dich' %}active{% endif %}">Tất cả mặt hàng <span class="count">{{ so_mat_hang }}</span></a>
+    <a href="{% qs tab='giao_dich' page=None %}" class="tab {% if tab == 'giao_dich' %}active{% endif %}">Đã giao dịch <span class="count">{{ so_gd }}</span></a>
+  </div>
+  <form class="flex flex-wrap items-end gap-3 px-5 py-4">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div><label class="mb-1 block text-[11px] text-gray-500">Từ ngày</label><input type="date" name="tu" value="{{ tu|iso }}" class="input w-auto"></div>
+    <div><label class="mb-1 block text-[11px] text-gray-500">Đến ngày</label><input type="date" name="den" value="{{ den|iso }}" class="input w-auto"></div>
+    <div><label class="mb-1 block text-[11px] text-gray-500">Danh mục</label>
+      <select name="dm" class="input w-auto"><option value="">Tất cả danh mục</option>{% for d in danh_muc %}<option value="{{ d.pk }}" {% if dm == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.ten_danhmuc }}</option>{% endfor %}</select></div>
+    <div><label class="mb-1 block text-[11px] text-gray-500">Sản phẩm</label>
+      <select name="sp" class="input w-56"><option value="">Tất cả sản phẩm</option>{% for s in san_pham %}<option value="{{ s.pk }}" {% if sp == s.pk|stringformat:"s" %}selected{% endif %}>{{ s.ma_sp }} · {{ s.ten_sp }}</option>{% endfor %}</select></div>
+    <div class="relative min-w-[180px] flex-1"><label class="mb-1 block text-[11px] text-gray-500">Từ khóa</label><input name="q" value="{{ q }}" placeholder="Mã / tên SP" class="input"></div>
+    {% if tab != 'giao_dich' %}<label class="flex items-center gap-2 pb-2 text-[12px]"><input type="checkbox" name="chi_gd" value="1" {% if chi_gd %}checked{% endif %} class="rounded border-gray-300 text-brand-700">Chỉ SP có phát sinh</label>{% endif %}
+    <button class="btn btn-primary"><i data-lucide="filter"></i>Lọc</button>
+  </form>
+  <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
+    <i data-lucide="pin" class="h-3.5 w-3.5 text-red-500"></i><b class="text-brand-800">Quy tắc báo cáo</b>
+    Số liệu tính trực tiếp từ nhật ký kho của các phiếu đã xác nhận. Tồn cuối = Tồn đầu + Nhập − Xuất ± Điều chỉnh kiểm kê. File xuất tự động đính kèm thời gian khởi tạo &amp; người xuất.
+  </div>
+  <div class="overflow-x-auto">
+    {% if tab == 'giao_dich' %}
+    <table class="tbl">
+      <thead><tr><th>Thời gian</th><th>Chứng từ</th><th>Loại</th><th>Mã SP</th><th>Tên SP</th><th class="text-right">Trước</th><th class="text-right">Thay đổi</th><th class="text-right">Sau</th><th>Người thực hiện</th></tr></thead>
+      <tbody>
+      {% for l in page %}
+      <tr>
+        <td class="text-gray-500">{{ l.ngay_tao|dt }}</td>
+        <td class="font-medium">{% if l.ma_phieu_nhap_id %}<a class="hover:text-brand-700" href="{% url 'nhap_detail' l.ma_phieu_nhap_id %}">{{ l.ma_phieu_nhap_id }}</a>{% elif l.ma_phieu_xuat_id %}<a class="hover:text-brand-700" href="{% url 'xuat_detail' l.ma_phieu_xuat_id %}">{{ l.ma_phieu_xuat_id }}</a>{% elif l.ma_phieu_kiem_id %}<a class="hover:text-brand-700" href="{% url 'kiem_detail' l.ma_phieu_kiem_id %}">{{ l.ma_phieu_kiem_id }}</a>{% endif %}</td>
+        <td>{% badge l.loai_giao_dich %}</td>
+        <td class="text-gray-500">{{ l.id_sp.ma_sp }}</td><td>{{ l.id_sp.ten_sp }}</td>
+        <td class="text-right">{{ l.sl_truoc|qty }}</td>
+        <td class="text-right font-semibold {% if l.sl_thay_doi < 0 %}text-red-600{% else %}text-emerald-700{% endif %}">{{ l.sl_thay_doi|signed }}</td>
+        <td class="text-right">{{ l.sl_sau|qty }}</td>
+        <td class="text-gray-500">{{ l.nguoi_thuc_hien.ho_ten }}</td>
+      </tr>
+      {% empty %}<tr><td colspan="9" class="py-10 text-center text-gray-400">Không có giao dịch trong kỳ.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <table class="tbl">
+      <thead><tr><th>Mã SP</th><th>Tên SP</th><th>ĐVT</th><th class="text-right">Tồn đầu kỳ</th><th class="text-right">Tổng nhập</th><th class="text-right">Tổng xuất</th><th class="text-right">Điều chỉnh KK</th><th class="text-right">Tồn cuối kỳ</th><th class="text-right">Giá trị tồn</th></tr></thead>
+      <tbody>
+      {% for r in page %}
+      <tr>
+        <td class="text-gray-500">{{ r.sp.ma_sp }}</td><td class="font-medium">{{ r.sp.ten_sp }}</td><td class="text-gray-500">{{ r.sp.don_vi }}</td>
+        <td class="text-right">{{ r.dau|qty }}</td>
+        <td class="text-right {% if r.nhap %}text-emerald-700{% else %}text-gray-300{% endif %}">{{ r.nhap|qty }}</td>
+        <td class="text-right {% if r.xuat %}text-red-600{% else %}text-gray-300{% endif %}">{{ r.xuat|qty }}</td>
+        <td class="text-right {% if not r.kiem %}text-gray-300{% endif %}">{{ r.kiem|signed }}</td>
+        <td class="text-right font-semibold text-brand-700">{{ r.cuoi|qty }}</td>
+        <td class="text-right">{{ r.gia_tri|money }}</td>
+      </tr>
+      {% empty %}<tr><td colspan="9" class="py-10 text-center text-gray-400">Không có dữ liệu.</td></tr>{% endfor %}
+      </tbody>
+      {% if page.paginator.count %}
+      <tfoot><tr class="bg-brand-50 font-semibold"><td colspan="3" class="px-4 py-3">Tổng cộng ({{ so_mat_hang }} mặt hàng)</td><td class="px-4 text-right">{{ tong.dau|qty }}</td><td class="px-4 text-right">{{ tong.nhap|qty }}</td><td class="px-4 text-right">{{ tong.xuat|qty }}</td><td class="px-4 text-right">{{ tong.kiem|signed }}</td><td class="px-4 text-right">{{ tong.cuoi|qty }}</td><td class="px-4 text-right">{{ tong.gia_tri|money }}</td></tr></tfoot>
+      {% endif %}
+    </table>
+    {% endif %}
+  </div>
+  {% include "partials/pagination.html" with unit="dòng" %}
+</div>
+
+<!-- Modal xuất báo cáo -->
+<div x-show="exp" x-transition.opacity x-cloak class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+  <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl" @click.outside="exp=false">
+    <div class="flex items-start justify-between border-b px-6 py-5">
+      <div><h3 class="text-[17px] font-semibold">📥 Xuất báo cáo Nhập - Xuất - Tồn</h3><p class="text-[12px] text-gray-500">Lựa chọn định dạng tệp tin cần tải về máy tính.</p></div>
+      <button @click="exp=false" class="text-gray-400">✕</button>
+    </div>
+    <div class="space-y-3 px-6 py-5">
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border p-4" :class="fmt==='xlsx' && 'border-brand-700 bg-brand-50'">
+        <input type="radio" value="xlsx" x-model="fmt" class="text-brand-700"><span><b>File Excel (.xlsx)</b><br><span class="text-[12px] text-gray-500">Dữ liệu bảng tính chi tiết</span></span></label>
+      <label class="flex cursor-pointer items-center gap-3 rounded-xl border p-4" :class="fmt==='pdf' && 'border-brand-700 bg-brand-50'">
+        <input type="radio" value="pdf" x-model="fmt" class="text-brand-700"><span><b>File PDF (.pdf)</b><br><span class="text-[12px] text-gray-500">Bản in ký duyệt báo cáo</span></span></label>
+      <p class="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">📌 Kỳ báo cáo {{ tu|d }} – {{ den|d }}. File xuất tự động đính kèm Thời gian khởi tạo &amp; Người xuất: {{ user.ho_ten }}.</p>
+    </div>
+    <div class="flex justify-end gap-2 rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+      <button class="btn btn-ghost" @click="exp=false">Hủy</button>
+      <a class="btn btn-primary" :href="'{% url 'bao_cao_export' %}{% qs page=None tab=None %}&format=' + fmt" @click="setTimeout(()=>exp=false,300)"><i data-lucide="download"></i>Tải về báo cáo</a>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}

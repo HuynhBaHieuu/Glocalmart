@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Tạo phiếu kiểm kê{% endblock %}
+{% block content %}
+{{ products|json_script:"products-data" }}
+{{ danh_muc|json_script:"dm-data" }}
+{{ old|json_script:"old-data" }}
+<div x-data="kiemKe()" x-init="init()">
+  <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <a href="{% url 'kiem' %}" class="hover:underline">Kiểm kê</a> <span class="mx-1">›</span> <span class="font-medium text-brand-700">Tạo phiếu</span></nav>
+  <h1 class="mb-5 text-[24px] font-semibold text-brand-800">Tạo phiếu kiểm kê</h1>
+
+  <form method="post" class="grid gap-5 xl:grid-cols-[1fr_300px]" @submit="if (!valid) $event.preventDefault()">
+    {% csrf_token %}
+    <div class="space-y-5">
+      <div class="card p-5">
+        <h3 class="mb-4 text-[15px] font-semibold text-brand-800">Cấu hình kiểm kê</h3>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div><label class="label">Mã phiếu</label><input class="input" value="{{ ma_du_kien }}" readonly></div>
+          <div><label class="label">Người kiểm kê</label><input class="input" value="{{ user.ho_ten }}" readonly></div>
+          <div><label class="label">Ngày kiểm</label><input class="input" value="{% now 'd/m/Y H:i' %}" readonly></div>
+          <div class="sm:col-span-3"><label class="label">Ghi chú</label><input name="ghi_chu" x-model="ghi_chu" class="input" placeholder="VD: Kiểm kê định kỳ khu kệ A – đồ uống"></div>
+        </div>
+      </div>
+
+      <div class="card overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+          <div><h3 class="text-[15px] font-semibold text-brand-800">Bảng Đếm &amp; Nhập số lượng (Lần 1)</h3><p class="text-[12px] text-gray-500">Tối đa {{ max_sp }} sản phẩm / phiếu · Đã chọn <b x-text="items.length"></b>/{{ max_sp }}</p></div>
+          <div class="flex flex-wrap gap-2">
+            <select x-model="dm" class="input w-auto">
+              <option value="">Thêm theo danh mục...</option>
+              <template x-for="d in dms" :key="d.id"><option :value="d.ten" x-text="d.ten"></option></template>
+            </select>
+            <button type="button" class="btn btn-ghost" @click="addCategory()" :disabled="!dm"><i data-lucide="list-plus"></i>Thêm cả danh mục</button>
+            <div class="relative w-64" @click.outside="search=''">
+              <input x-model="search" @keydown.enter.prevent="results[0] && add(results[0])" placeholder="+ Tìm sản phẩm theo mã / tên" class="input">
+              <div x-show="search" class="absolute right-0 z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-xl">
+                <template x-for="p in results" :key="p.id">
+                  <button type="button" @click="add(p)" class="block w-full px-3 py-2 text-left hover:bg-brand-50"><span class="block text-[12.5px] font-medium" x-text="p.ten"></span><span class="text-[11px] text-gray-400" x-text="p.ma + ' · ' + p.dm"></span></button>
+                </template>
+                <p x-show="!results.length" class="px-3 py-3 text-[12px] text-gray-400">Không tìm thấy.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="tbl compact">
+            <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Danh mục</th><th>Đơn vị</th><th class="w-36 text-center">Số lượng đếm thực tế</th><th>Ghi chú</th><th class="w-10"></th></tr></thead>
+            <tbody>
+              <template x-for="(it, i) in items" :key="it.id">
+                <tr>
+                  <td class="font-semibold text-brand-800" x-text="it.p.ma"></td>
+                  <td x-text="it.p.ten"></td>
+                  <td class="text-gray-500" x-text="it.p.dm"></td>
+                  <td x-text="it.p.dvt"></td>
+                  <td><input type="hidden" name="sp" :value="it.id"><input name="sl" type="number" min="0" step="any" required x-model="it.sl" class="input text-center font-semibold" placeholder="Nhập SL"></td>
+                  <td><input name="note" x-model="it.note" class="input" placeholder="VD: rách bao bì"></td>
+                  <td><button type="button" @click="items.splice(i,1)" class="text-red-500">✕</button></td>
+                </tr>
+              </template>
+              <tr x-show="!items.length"><td colspan="7" class="py-10 text-center text-[12px] text-gray-400">Chọn sản phẩm cần kiểm kê bằng ô tìm kiếm hoặc thêm cả danh mục.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="flex items-center gap-2 border-t bg-brand-50/50 px-5 py-3 text-[12px] text-gray-600"><i data-lucide="eye-off" class="h-4 w-4 text-brand-700"></i>Số lượng tồn trên hệ thống sẽ tự động được đối chiếu sau khi lưu — được ẩn trong lúc đếm để tránh đếm thiên lệch.</p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="card p-5">
+        <h3 class="mb-3 text-[14px] font-semibold">Hoàn tất đếm lần 1</h3>
+        <button class="btn btn-primary w-full" :disabled="!valid"><i data-lucide="save"></i>Lưu kết quả đếm</button>
+        <a href="{% url 'kiem' %}" class="btn btn-ghost mt-2 w-full">Hủy</a>
+        <p class="mt-2 text-[11px] text-gray-400" x-show="!valid" x-text="!items.length ? 'Chọn ít nhất 1 sản phẩm.' : (items.length > {{ max_sp }} ? 'Vượt quá {{ max_sp }} sản phẩm.' : 'Nhập số lượng đếm cho tất cả dòng.')"></p>
+      </div>
+      <div class="card border-emerald-200 bg-emerald-50/60 p-5 text-[12px] text-emerald-900">
+        <p class="mb-2 font-semibold">Quy trình kiểm kê mù 2 bước</p>
+        <ol class="list-decimal space-y-1 pl-5">
+          <li>Đếm lần 1 — không hiển thị tồn hệ thống.</li>
+          <li>Hệ thống đối chiếu, gắn cờ sản phẩm lệch số.</li>
+          <li>Đếm lần 2 cho các sản phẩm bị gắn cờ.</li>
+          <li>Gửi duyệt → Quản lý xem chênh lệch, giá trị thất thoát và cân bằng kho.</li>
+        </ol>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function kiemKe() {
+  const products = jsonData('products-data');
+  const byId = Object.fromEntries(products.map(p => [p.id, p]));
+  const MAX = {{ max_sp }};
+  return {
+    items: [], search: '', dm: '', ghi_chu: '', dms: jsonData('dm-data'),
+    init() {
+      const old = jsonData('old-data');
+      if (old) { this.ghi_chu = old.ghi_chu; old.items.forEach(it => byId[it.id] && this.items.push({ id: it.id, p: byId[it.id], sl: it.sl, note: it.note })); }
+    },
+    get results() {
+      const q = this.search.trim().toLowerCase();
+      if (!q) return [];
+      return products.filter(p => !this.items.some(i => i.id === p.id) && (p.ten.toLowerCase().includes(q) || p.ma.toLowerCase().includes(q))).slice(0, 10);
+    },
+    add(p) {
+      if (this.items.length >= MAX) { alert(`Mỗi phiếu kiểm kê tối đa ${MAX} sản phẩm.`); return; }
+      if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: '', note: '' });
+      this.search = '';
+    },
+    addCategory() { products.filter(p => p.dm === this.dm).forEach(p => this.items.length < MAX && this.add(p)); this.dm = ''; },
+    get valid() { return this.items.length && this.items.length <= MAX && this.items.every(i => i.sl !== '' && Number(i.sl) >= 0); },
+  };
+}
+</script>
+{% endblock %}

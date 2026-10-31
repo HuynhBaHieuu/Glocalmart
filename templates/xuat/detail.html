@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}{{ p.pk }}{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400"><a href="{% url 'xuat' %}" class="hover:underline">Xuất kho</a> <span class="mx-1">/</span> <span class="font-medium text-brand-700">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}Xác nhận phiếu xuất{% else %}Chi tiết phiếu xuất{% endif %}</span></nav>
+<div class="mb-5 flex flex-wrap items-center gap-3">
+  <h1 class="mr-auto text-[22px] font-semibold text-gray-900">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}Xác nhận phiếu xuất kho{% else %}Phiếu xuất kho {{ p.pk }}{% endif %}</h1>
+  <a href="{% url 'xuat_print' p.pk %}" target="_blank" class="btn btn-outline"><i data-lucide="printer"></i>In phiếu</a>
+</div>
+
+{% if p.trang_thai == 'DA_HUY' %}
+<div class="mb-4 flex items-start gap-3 rounded-xl border border-gray-300 bg-gray-100 px-4 py-3 text-[13px] text-gray-700"><i data-lucide="ban" class="mt-0.5 h-4 w-4"></i><span><b>Phiếu đã bị hủy.</b> Lý do: {{ p.ly_do_huy }}</span></div>
+{% endif %}
+{% if canh_bao %}
+<div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
+  <p class="mb-1 flex items-center gap-2 font-semibold"><i data-lucide="triangle-alert" class="h-4 w-4"></i>Phiếu chưa thể xác nhận</p>
+  <ul class="list-disc pl-6">{% for c in canh_bao %}<li>{{ c }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="grid gap-5 xl:grid-cols-[1fr_320px]">
+  <div class="space-y-5">
+    <div class="card p-5">
+      <div class="mb-4 flex items-start justify-between">
+        <div><h3 class="text-[16px] font-semibold">Phiếu xuất {{ p.pk }}</h3><p class="text-[12px] text-gray-500">Kiểm tra thông tin phiếu trước khi xác nhận.</p></div>
+        {% badge p.trang_thai %}
+      </div>
+      <div class="grid gap-3 sm:grid-cols-4">
+        <div class="rounded-lg bg-gray-50 p-3"><p class="text-[11px] text-gray-500">Mã phiếu</p><p class="font-semibold">{{ p.pk }}</p></div>
+        <div class="rounded-lg bg-gray-50 p-3"><p class="text-[11px] text-gray-500">Ngày lập</p><p class="font-semibold">{{ p.ngay_tao|dt }}</p></div>
+        <div class="rounded-lg bg-gray-50 p-3"><p class="text-[11px] text-gray-500">Người lập</p><p class="font-semibold">{{ p.nguoi_tao.ho_ten }}</p></div>
+        <div class="rounded-lg bg-gray-50 p-3"><p class="text-[11px] text-gray-500">Lý do xuất</p><p class="font-semibold">{{ p.get_ly_do_xuat_display }}</p></div>
+      </div>
+      {% if p.ghi_chu %}<div class="mt-3"><p class="text-[11px] text-gray-500">Ghi chú</p><p>{{ p.ghi_chu }}</p></div>{% endif %}
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="border-b px-5 py-3.5 font-semibold">Danh sách sản phẩm xuất</div>
+      <div class="overflow-x-auto">
+        <table class="tbl compact">
+          <thead><tr><th>Sản phẩm</th><th>Hạn sử dụng</th><th class="text-right">SL xuất</th><th class="text-right">Tồn hiện tại</th><th class="text-right">Tồn sau xuất</th></tr></thead>
+          <tbody>
+          {% for ct in chi_tiet %}
+          <tr class="{% if p.trang_thai == 'CHUA_XAC_NHAN' and ct.so_luong_xuat > ct.id_sp.ton_kho %}bg-red-50/50{% endif %}">
+            <td><p class="font-medium">{{ ct.id_sp.ten_sp }}</p><p class="text-[11px] text-gray-400">SKU: {{ ct.id_sp.ma_sp }}</p></td>
+            <td>{{ ct.id_sp.han_su_dung|d }} {% if ct.id_sp.da_het_han %}<span class="rounded bg-red-50 px-1.5 text-[10.5px] text-red-600">Hết hạn</span>{% endif %}</td>
+            <td class="text-right font-semibold">{{ ct.so_luong_xuat|qty }} {{ ct.id_sp.don_vi }}</td>
+            <td class="text-right">{{ ct.id_sp.ton_kho|qty }}</td>
+            <td class="text-right">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}<span class="{% if ct.so_luong_xuat > ct.id_sp.ton_kho %}font-semibold text-red-600{% endif %}" data-ton="{{ ct.id_sp.ton_kho|num }}" data-xuat="{{ ct.so_luong_xuat|num }}"></span>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr class="bg-brand-50/60"><td colspan="2" class="px-3 py-3 font-semibold">Tổng cộng</td><td class="px-3 text-right font-semibold">{{ p.tong_so_luong|qty }}</td><td colspan="2" class="px-3 text-right text-gray-500">Giá trị theo giá bán: <b class="text-brand-800">{{ p.tong_gia_tri|vnd }}</b></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-4">
+    <div class="card p-5">
+      <h3 class="mb-3 text-[14px] font-semibold">Tóm tắt phiếu xuất</h3>
+      <dl class="space-y-2 text-[12.5px]">
+        <div class="flex justify-between"><dt class="text-gray-500">Số sản phẩm</dt><dd class="font-semibold">{{ chi_tiet|length }} loại</dd></div>
+        <div class="flex justify-between"><dt class="text-gray-500">Tổng số lượng xuất</dt><dd class="font-semibold">{{ p.tong_so_luong|qty }}</dd></div>
+        <div class="flex justify-between"><dt class="text-gray-500">Trạng thái</dt><dd>{% badge p.trang_thai %}</dd></div>
+        {% if p.ngay_xac_nhan %}<div class="flex justify-between"><dt class="text-gray-500">Xác nhận bởi</dt><dd class="text-right font-semibold">{{ p.nguoi_xac_nhan.ho_ten }}<br><span class="font-normal text-gray-400">{{ p.ngay_xac_nhan|dt }}</span></dd></div>{% endif %}
+      </dl>
+    </div>
+    {% if p.trang_thai != 'DA_HUY' %}
+    <div class="card space-y-2 p-5">
+      <h3 class="mb-1 text-[14px] font-semibold">Hành động</h3>
+      {% if p.trang_thai == 'CHUA_XAC_NHAN' %}
+      <form method="post" action="{% url 'xuat_confirm' p.pk %}" onsubmit="return confirm('Xác nhận phiếu và trừ tồn kho? Phiếu sẽ bị khóa sau khi xác nhận.')">{% csrf_token %}
+        <button class="btn btn-primary w-full" {% if canh_bao %}disabled{% endif %}><i data-lucide="circle-check"></i>Xác nhận phiếu</button>
+      </form>
+      <a href="{% url 'xuat_edit' p.pk %}" class="btn btn-outline w-full"><i data-lucide="square-pen"></i>Sửa phiếu</a>
+      {% endif %}
+      {% if p.trang_thai == 'CHUA_XAC_NHAN' or user.is_admin %}
+      <button class="btn btn-danger w-full" @click="$dispatch('open-huy')"><i data-lucide="ban"></i>Hủy phiếu</button>
+      {% endif %}
+      {% if user.is_admin and p.trang_thai == 'CHUA_XAC_NHAN' %}
+      <form method="post" action="{% url 'xuat_delete' p.pk %}" onsubmit="return confirm('Xóa vĩnh viễn phiếu nháp này?')">{% csrf_token %}
+        <button class="btn btn-ghost w-full text-red-600"><i data-lucide="trash-2"></i>Xóa phiếu nháp</button></form>
+      {% endif %}
+      <a href="{% url 'xuat' %}" class="block pt-1 text-center text-[12px] text-gray-500 hover:text-brand-700">Quay lại danh sách</a>
+    </div>
+    {% endif %}
+    <div class="card border-amber-200 bg-amber-50/70 p-5 text-[12px] text-amber-900">
+      <p class="mb-2 font-semibold">Khi nhấn Xác nhận</p>
+      <ul class="list-disc space-y-1 pl-5">
+        <li>Hệ thống kiểm tra lại tồn kho thời gian thực (khóa dòng dữ liệu).</li>
+        <li>Tự động trừ tồn kho theo số lượng xuất và ghi nhật ký kho.</li>
+        <li>Phiếu chuyển sang “Đã xác nhận” và bị khóa chỉnh sửa.</li>
+      </ul>
+    </div>
+    {% if lich_su %}
+    <div class="card p-5">
+      <h3 class="mb-3 text-[14px] font-semibold">Lịch sử</h3>
+      <ol class="space-y-2 text-[12px]">{% for l in lich_su %}<li><b>{{ l.hanh_dong }}</b> · {{ l.nguoi_dung.ho_ten }}<br><span class="text-gray-400">{{ l.ngay_tao|dt }}{% if l.chi_tiet %} — {{ l.chi_tiet }}{% endif %}</span></li>{% endfor %}</ol>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% url 'xuat_cancel' p.pk as cancel_url %}
+{% include "partials/reason_modal.html" with id="huy" action=cancel_url title="Hủy phiếu xuất" desc="Nếu phiếu đã xác nhận, tồn kho sẽ được cộng trả lại. Thao tác được ghi nhật ký." btn="Hủy phiếu" %}
+{% endblock %}
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-ton]').forEach(el => {
+    const sau = Number(el.dataset.ton) - Number(el.dataset.xuat);
+    el.textContent = vn(sau);
+  });
+</script>
+{% endblock %}

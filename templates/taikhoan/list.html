@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Quản lý tài khoản{% endblock %}
+{% block content %}
+{{ modal|json_script:"modal-data" }}
+<div x-data="crud({ ma_nv: '{{ goi_y_ma }}', ho_ten: '', vai_tro: 'NHAN_VIEN', email: '', ten_dang_nhap: '' })">
+  <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý tài khoản <span class="mx-1">›</span> <span class="font-medium text-brand-700">Tài khoản</span></nav>
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Tài khoản &amp; Phân quyền</h1>
+      <p class="mt-1 text-[13px] text-gray-500">Khởi tạo, gán nhóm quyền và quản lý trạng thái tài khoản nhân viên.</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'api_keys' %}" class="btn btn-ghost"><i data-lucide="key-round"></i>REST API Key</a>
+      <a href="{% url 'audit_logs' %}" class="btn btn-ghost"><i data-lucide="scroll-text"></i>Nhật ký thao tác</a>
+      <button class="btn btn-primary" @click="create()"><i data-lucide="plus"></i>Thêm tài khoản mới</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tổng tài khoản</p><p class="mt-1 text-[28px] font-semibold">{{ tong }}</p><p class="text-[11px] text-gray-400">Tài khoản trong hệ thống</p></div><span class="stat-icon"><i data-lucide="users" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Quản trị viên</p><p class="mt-1 text-[28px] font-semibold">{{ so_admin }}</p><p class="text-[11px] text-gray-400">Toàn quyền hệ thống</p></div><span class="stat-icon"><i data-lucide="shield-check" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Nhân viên</p><p class="mt-1 text-[28px] font-semibold">{{ so_nv }}</p><p class="text-[11px] text-gray-400">{{ dang_hd }} tài khoản đang hoạt động</p></div><span class="stat-icon"><i data-lucide="user" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Bị khóa / vô hiệu</p><p class="mt-1 text-[28px] font-semibold text-red-600">{{ bi_khoa }}</p><p class="text-[11px] text-gray-400">Khóa tự động sau {{ max_sai }} lần sai</p></div><span class="stat-icon !bg-red-50 !text-red-600"><i data-lucide="lock" class="h-4 w-4"></i></span></div>
+  </div>
+
+  <div class="card mt-5 overflow-hidden">
+    <div class="flex flex-wrap items-center border-b px-5">
+      <a href="{% qs vt=None page=None %}" class="tab {% if not vt %}active{% endif %}">Tất cả tài khoản <span class="count">{{ tong }}</span></a>
+      <a href="{% qs vt='ADMIN' page=None %}" class="tab {% if vt == 'ADMIN' %}active{% endif %}">Quản trị viên <span class="count">{{ so_admin }}</span></a>
+      <a href="{% qs vt='NHAN_VIEN' page=None %}" class="tab {% if vt == 'NHAN_VIEN' %}active{% endif %}">Nhân viên <span class="count">{{ so_nv }}</span></a>
+      <a href="{% url 'tai_khoan_export' %}{% qs page=None %}" class="btn btn-ghost my-2 ml-auto"><i data-lucide="download"></i>Xuất danh sách</a>
+    </div>
+    <form class="flex flex-wrap items-center gap-3 px-5 py-3.5">
+      <input type="hidden" name="vt" value="{{ vt }}">
+      <div class="relative min-w-[240px] flex-1 md:max-w-sm">
+        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+        <input name="q" value="{{ q }}" placeholder="Tìm theo tên, username, email..." class="input pl-9">
+      </div>
+      <select name="tt" class="input w-auto" onchange="this.form.submit()">
+        <option value="">Tất cả trạng thái</option>
+        <option value="active" {% if tt == 'active' %}selected{% endif %}>Đang hoạt động</option>
+        <option value="locked" {% if tt == 'locked' %}selected{% endif %}>Tạm khóa</option>
+        <option value="disabled" {% if tt == 'disabled' %}selected{% endif %}>Vô hiệu hóa</option>
+      </select>
+      <span class="ml-auto text-[12px] text-gray-500"><b class="text-gray-800">{{ page.paginator.count }}</b> tài khoản</span>
+    </form>
+    <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
+      <i data-lucide="lock" class="h-3.5 w-3.5 text-brand-700"></i><b class="text-brand-800">Phân quyền &amp; Khóa tài khoản.</b> Không cho phép tự đăng ký; vô hiệu hóa là xóa mềm để bảo toàn lịch sử chứng từ.
+    </div>
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead><tr><th>Mã NV</th><th>Username</th><th>Email</th><th>Họ và tên</th><th>Nhóm quyền</th><th>Trạng thái</th><th class="text-right">Thao tác</th></tr></thead>
+        <tbody>
+        {% for u in page %}
+        <tr class="{% if not u.is_active %}opacity-60{% endif %}">
+          <td class="text-gray-500">{{ u.ma_nv }}</td>
+          <td class="font-medium">{{ u.ten_dang_nhap }}{% if u.pk == user.pk %} <span class="text-[10.5px] text-brand-700">(bạn)</span>{% endif %}</td>
+          <td class="text-gray-500">{{ u.email }}</td>
+          <td>{{ u.ho_ten }}</td>
+          <td>{% badge u.vai_tro %}</td>
+          <td>
+            {% if not u.is_active %}{% dot_badge False "" "Vô hiệu hóa" %}
+            {% elif u.is_locked %}<span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-200"><i data-lucide="lock" class="h-3 w-3"></i>Tạm khóa</span>
+            {% else %}{% dot_badge True "Đang hoạt động" %}{% endif %}
+            {% if u.so_lan_sai and not u.is_locked %}<p class="mt-0.5 text-[10.5px] text-orange-500">Sai mật khẩu {{ u.so_lan_sai }} lần</p>{% endif %}
+          </td>
+          <td>
+            <div class="flex items-center justify-end gap-3 whitespace-nowrap text-[12px]">
+              <button class="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-brand-700"
+                      @click="edit({pk:'{{ u.pk }}', ma_nv:'{{ u.ma_nv|escapejs }}', ho_ten:'{{ u.ho_ten|escapejs }}', vai_tro:'{{ u.vai_tro }}', email:'{{ u.email|escapejs }}', ten_dang_nhap:'{{ u.ten_dang_nhap|escapejs }}'})"><i data-lucide="square-pen" class="h-3.5 w-3.5"></i>Sửa</button>
+              {% if u.pk != user.pk %}
+              <form method="post" action="{% url 'tai_khoan_lock' u.pk %}">{% csrf_token %}
+                <button class="inline-flex items-center gap-1 {% if u.is_locked %}font-medium text-brand-700{% else %}text-gray-500 hover:text-orange-600{% endif %}"><i data-lucide="{% if u.is_locked %}lock-open{% else %}lock{% endif %}" class="h-3.5 w-3.5"></i>{% if u.is_locked %}Mở khóa{% else %}Khóa{% endif %}</button></form>
+              <form method="post" action="{% url 'tai_khoan_active' u.pk %}" onsubmit="return confirm('{% if u.is_active %}Vô hiệu hóa{% else %}Kích hoạt lại{% endif %} tài khoản {{ u.ten_dang_nhap|escapejs }}?')">{% csrf_token %}
+                <button class="inline-flex items-center gap-1 {% if u.is_active %}text-gray-400 hover:text-red-600{% else %}font-medium text-brand-700{% endif %}"><i data-lucide="{% if u.is_active %}user-x{% else %}user-check{% endif %}" class="h-3.5 w-3.5"></i>{% if u.is_active %}Vô hiệu hóa{% else %}Kích hoạt{% endif %}</button></form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Không có tài khoản phù hợp.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with unit="tài khoản" %}
+  </div>
+
+  <!-- Modal thêm / sửa tài khoản -->
+  <div x-show="open" x-transition.opacity x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" @keydown.escape.window="open=false">
+    <form method="post" action="{% url 'tai_khoan_save' %}" class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl" @click.outside="open=false" autocomplete="off">
+      {% csrf_token %}
+      <input type="hidden" name="pk" :value="pk">
+      <div class="flex items-start gap-3 border-b px-6 py-5">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="square-pen" class="h-5 w-5"></i></span>
+        <div class="flex-1"><h3 class="text-[18px] font-semibold" x-text="pk ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'"></h3><p class="text-[12px] text-gray-500">Khởi tạo tài khoản nhân viên, cấp email và phân quyền hệ thống.</p></div>
+        <button type="button" @click="open=false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+        <div>
+          <label class="label" :class="e.ma_nv && '!text-red-600'">Mã NV <span class="text-red-500">*</span> <span class="err-text" x-text="e.ma_nv"></span></label>
+          <input name="ma_nv" x-model="f.ma_nv" class="input" :class="e.ma_nv && 'err'">
+        </div>
+        <div>
+          <label class="label" :class="e.ho_ten && '!text-red-600'">Họ và tên <span class="text-red-500">*</span> <span class="err-text" x-text="e.ho_ten"></span></label>
+          <input name="ho_ten" x-model="f.ho_ten" class="input" :class="e.ho_ten && 'err'" placeholder="Nguyễn Văn A">
+        </div>
+        <div>
+          <label class="label" :class="e.vai_tro && '!text-red-600'">Nhóm quyền <span class="text-red-500">*</span> <span class="err-text" x-text="e.vai_tro"></span></label>
+          <select name="vai_tro" x-model="f.vai_tro" class="input" :class="e.vai_tro && 'err'"><option value="NHAN_VIEN">Nhân viên</option><option value="ADMIN">Quản trị viên</option></select>
+        </div>
+        <div>
+          <label class="label" :class="e.email && '!text-red-600'">Email <span class="text-red-500">*</span> <span class="err-text" x-text="e.email"></span></label>
+          <input name="email" type="email" x-model="f.email" class="input" :class="e.email && 'err'" placeholder="nvkho@glocal.vn">
+        </div>
+        <div>
+          <label class="label" :class="e.ten_dang_nhap && '!text-red-600'">Username <span class="text-red-500">*</span> <span class="err-text" x-text="e.ten_dang_nhap"></span></label>
+          <input name="ten_dang_nhap" x-model="f.ten_dang_nhap" class="input" :class="e.ten_dang_nhap && 'err'" placeholder="nvkho_006" autocomplete="off">
+        </div>
+        <div>
+          <label class="label" :class="e.mat_khau && '!text-red-600'">Mật khẩu <span class="text-red-500" x-show="!pk">*</span> <span class="err-text" x-text="e.mat_khau"></span></label>
+          <input name="mat_khau" type="password" class="input" :class="e.mat_khau && 'err'" :placeholder="pk ? 'Để trống nếu không đổi' : 'Tối thiểu 6 ký tự'" autocomplete="new-password">
+        </div>
+        <div class="rounded-xl bg-gray-50 p-3 text-[12px] text-gray-600 sm:col-span-2">
+          <b>Quyền hạn:</b>
+          <span x-show="f.vai_tro === 'NHAN_VIEN'">Lập phiếu nhập/xuất, đếm kiểm kê, xem cảnh báo &amp; báo cáo. <b>Không</b> có quyền xóa dữ liệu, quản lý danh mục, tài khoản hay duyệt kiểm kê.</span>
+          <span x-show="f.vai_tro === 'ADMIN'">Toàn bộ quyền của Nhân viên + quản lý tài khoản, danh mục, sản phẩm, nhà cung cấp, duyệt/từ chối kiểm kê và xóa bản ghi.</span>
+        </div>
+      </div>
+      <div class="flex items-center justify-between rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+        <span class="text-[11px] text-gray-400">* Thông tin bắt buộc</span>
+        <div class="flex gap-2"><button type="button" class="btn btn-ghost" @click="open=false">Hủy</button><button class="btn btn-primary" x-text="pk ? 'Lưu thay đổi' : 'Tạo tài khoản'"></button></div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

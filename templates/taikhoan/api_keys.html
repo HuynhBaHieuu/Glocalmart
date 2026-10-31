@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}REST API Key{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400"><a href="{% url 'tai_khoan' %}" class="hover:underline">Quản lý tài khoản</a> <span class="mx-1">›</span> <span class="font-medium text-brand-700">REST API</span></nav>
+<div class="mb-5">
+  <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">REST API &amp; API Key</h1>
+  <p class="mt-1 text-[13px] text-gray-500">Cấp khóa cho hệ thống bên ngoài (Client App) tra cứu sản phẩm và tồn kho dưới dạng JSON.</p>
+</div>
+
+{% if new_key %}
+<div class="mb-5 rounded-xl border border-emerald-300 bg-emerald-50 p-5" x-data="{ copied:false }">
+  <p class="flex items-center gap-2 font-semibold text-emerald-800"><i data-lucide="circle-check" class="h-4 w-4"></i>Đã tạo API Key — hãy sao chép ngay, khóa chỉ hiển thị một lần.</p>
+  <div class="mt-3 flex gap-2"><code class="flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 font-mono text-[13px] ring-1 ring-emerald-200">{{ new_key }}</code>
+    <button class="btn btn-primary" @click="navigator.clipboard.writeText('{{ new_key }}'); copied=true" x-text="copied ? 'Đã sao chép' : 'Sao chép'"></button></div>
+</div>
+{% endif %}
+
+<div class="grid gap-5 xl:grid-cols-[1fr_440px]">
+  <div class="card overflow-hidden">
+    <form method="post" class="flex flex-wrap items-end gap-3 border-b px-5 py-4">{% csrf_token %}
+      <div class="flex-1"><label class="label">Tên ứng dụng / client</label><input name="ten" required class="input" placeholder="VD: Ứng dụng POS quầy cafe"></div>
+      <button class="btn btn-primary"><i data-lucide="key-round"></i>Tạo API Key</button>
+    </form>
+    <table class="tbl">
+      <thead><tr><th>Ứng dụng</th><th>Tiền tố</th><th>Người tạo</th><th>Ngày tạo</th><th>Dùng lần cuối</th><th>Trạng thái</th><th></th></tr></thead>
+      <tbody>
+      {% for k in keys %}
+      <tr><td class="font-medium">{{ k.ten }}</td><td><code class="text-[12px]">{{ k.tien_to }}…</code></td><td class="text-gray-500">{{ k.nguoi_tao.ho_ten }}</td><td class="text-gray-500">{{ k.ngay_tao|dt }}</td><td class="text-gray-500">{{ k.lan_dung_cuoi|dt }}</td>
+        <td>{% dot_badge k.is_active "Đang hoạt động" "Đã thu hồi" %}</td>
+        <td>{% if k.is_active %}<form method="post" action="{% url 'api_key_revoke' k.pk %}" onsubmit="return confirm('Thu hồi API Key này?')">{% csrf_token %}<button class="text-[12px] text-red-600 hover:underline">Thu hồi</button></form>{% endif %}</td></tr>
+      {% empty %}<tr><td colspan="7" class="py-8 text-center text-gray-400">Chưa có API Key.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card p-5 text-[12.5px]">
+    <h3 class="mb-3 text-[15px] font-semibold">Tài liệu API</h3>
+    <p class="text-gray-500">Gửi header <code class="rounded bg-gray-100 px-1">X-API-Key: &lt;khóa&gt;</code> trong mọi request. Phản hồi dạng JSON.</p>
+    <ul class="mt-3 space-y-3">
+      <li><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">GET</span> <code>/api/san-pham/</code><p class="text-gray-500">Danh sách sản phẩm. Lọc: <code>?ma=SP-0001</code>, <code>?danh_muc=DM001</code>, <code>?q=sữa</code>, <code>?trang_thai=DANG_BAN</code>, <code>?page=2</code></p></li>
+      <li><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">GET</span> <code>/api/san-pham/&lt;ma_sp&gt;/</code><p class="text-gray-500">Chi tiết một sản phẩm theo mã.</p></li>
+      <li><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">GET</span> <code>/api/ton-kho/&lt;ma_sp&gt;/</code><p class="text-gray-500">Tồn kho thời gian thực của sản phẩm.</p></li>
+      <li><span class="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-800">GET</span> <code>/api/danh-muc/</code><p class="text-gray-500">Danh sách danh mục đang hoạt động.</p></li>
+    </ul>
+    <p class="mt-4 font-semibold">Ví dụ</p>
+    <pre class="mt-1 overflow-x-auto rounded-lg bg-gray-900 p-3 text-[11.5px] text-emerald-200">curl -H "X-API-Key: glm_xxx" \
+  "{{ base }}san-pham/?danh_muc=DM001"</pre>
+    <p class="mt-3 text-gray-500">Thiếu hoặc sai khóa → <code>401 Unauthorized</code>.</p>
+  </div>
+</div>
+{% endblock %}

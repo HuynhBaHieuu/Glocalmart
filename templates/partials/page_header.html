@@ -1,0 +1,7 @@
+{# tham số: title, subtitle, en (tiêu đề phụ tiếng Anh) #}
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">{{ title }}{% if en %}<span class="text-[12px] font-normal text-gray-500">{{ en }}</span>{% endif %}</h1>
+    {% if subtitle %}<p class="mt-1 text-[13px] text-gray-500">{{ subtitle }}</p>{% endif %}
+  </div>
+</div>

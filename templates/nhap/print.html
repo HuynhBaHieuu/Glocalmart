@@ -1,0 +1,21 @@
+{% extends "print_base.html" %}{% load wms_tags %}
+{% block title %}Phiếu nhập {{ p.pk }}{% endblock %}
+{% block body %}
+<h1>PHIẾU NHẬP KHO</h1>
+<p style="text-align:center" class="muted">Số: <b>{{ p.pk }}</b> · Ngày {{ p.ngay_tao|d }}
+  {% if p.trang_thai == 'DA_XAC_NHAN' %}<span class="stamp" style="color:#047857;margin-left:8px">ĐÃ NHẬP KHO</span>{% elif p.trang_thai == 'DA_HUY' %}<span class="stamp" style="color:#dc2626;margin-left:8px">ĐÃ HỦY</span>{% endif %}</p>
+<div class="meta">
+  <div>Nhà cung cấp: <b>{{ p.id_ncc.ten_ncc }}</b></div><div>Mã NCC: {{ p.id_ncc.ma_ncc }}</div>
+  <div>Địa chỉ: {{ p.id_ncc.dia_chi }}</div><div>Điện thoại: {{ p.id_ncc.so_dien_thoai }}</div>
+  <div>Người lập phiếu: {{ p.nguoi_tao.ho_ten }}</div><div>Trạng thái giao: {{ p.get_trang_thai_giao_display }}</div>
+  {% if p.ngay_xac_nhan %}<div>Xác nhận: {{ p.nguoi_xac_nhan.ho_ten }} – {{ p.ngay_xac_nhan|dt }}</div>{% endif %}
+  {% if p.ghi_chu %}<div style="grid-column:span 2">Ghi chú: {{ p.ghi_chu }}</div>{% endif %}
+</div>
+<table>
+  <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>ĐVT</th><th class="r">SL đặt</th><th class="r">SL thực nhận</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead>
+  <tbody>{% for ct in chi_tiet %}<tr><td>{{ forloop.counter }}</td><td>{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}{% if ct.ly_do_chenh_lech %}<br><span class="muted">Chênh lệch: {{ ct.get_ly_do_chenh_lech_display }}</span>{% endif %}</td><td>{{ ct.id_sp.don_vi }}</td><td class="r">{{ ct.so_luong_dat|qty }}</td><td class="r">{{ ct.so_luong_thuc_nhan|qty }}</td><td class="r">{{ ct.don_gia_nhap|money }}</td><td class="r">{{ ct.thanh_tien_thuc|money }}</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td colspan="7" class="r">TỔNG CỘNG</td><td class="r">{{ p.tong_tien_thuc|vnd }}</td></tr></tfoot>
+</table>
+{% if p.ghi_chu_doi_soat %}<p>Ghi chú đối soát: {{ p.ghi_chu_doi_soat }}</p>{% endif %}
+<div class="sign"><div><p><b>Người lập phiếu</b></p><p class="muted">(Ký, họ tên)</p><p class="sp"></p><p>{{ p.nguoi_tao.ho_ten }}</p></div><div><p><b>Người giao hàng</b></p><p class="muted">(Ký, họ tên)</p></div><div><p><b>Thủ kho</b></p><p class="muted">(Ký, họ tên)</p><p class="sp"></p><p>{{ p.nguoi_xac_nhan.ho_ten|default:"" }}</p></div></div>
+{% endblock %}

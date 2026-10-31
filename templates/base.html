@@ -1,0 +1,175 @@
+{% load static wms_tags %}<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}G'Local Mart WH{% endblock %} · G'Local Mart & Cafe</title>
+  <link rel="icon" href="{% static 'img/logo.svg' %}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap&subset=vietnamese" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: {
+              50: '#EDF3EF', 100: '#DCEBE3', 200: '#B7D6C6', 300: '#86B9A0', 400: '#4F9473',
+              500: '#2D7556', 600: '#1A6346', 700: '#13573D', 800: '#0B4C34', 900: '#0B3B2F', 950: '#062820'
+            },
+            page: '#F4F6F5'
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-page font-sans text-[13px] text-gray-800 antialiased" x-data="{ sidebar: false }">
+{% block body %}
+<div class="flex min-h-screen">
+  <!-- ============ SIDEBAR ============ -->
+  <div x-show="sidebar" x-transition.opacity class="fixed inset-0 z-30 bg-black/40 lg:hidden" @click="sidebar=false" x-cloak></div>
+  <aside class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col bg-brand-800 text-white transition-transform lg:translate-x-0"
+         :class="sidebar && 'translate-x-0'">
+    <a href="/" class="flex h-[76px] items-center gap-3 bg-brand-900 px-5">
+      <span class="grid h-9 w-9 place-items-center rounded-lg bg-white text-brand-800"><i data-lucide="package" class="h-5 w-5"></i></span>
+      <span>
+        <span class="block text-[15px] font-bold leading-tight">G'Local Mart WH</span>
+        <span class="block text-[11px] text-white/60">Quản lý kho</span>
+      </span>
+    </a>
+    <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+      {% for key, label, sub, icon, url in MENU %}
+      <a href="{{ url }}" class="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition {% if active == key %}bg-white/15 ring-1 ring-white/10{% else %}hover:bg-white/10{% endif %}">
+        <i data-lucide="{{ icon }}" class="h-[18px] w-[18px] shrink-0 {% if active == key %}text-white{% else %}text-white/80{% endif %}"></i>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-[13px] font-medium">{{ label }}</span>
+          <span class="block truncate text-[10.5px] text-white/50">{{ sub }}</span>
+        </span>
+        {% if key == 'dashboard' and THONG_BAO.canh_bao_ton %}<span class="rounded-full bg-red-500 px-1.5 text-[10px] font-semibold">{{ THONG_BAO.canh_bao_ton }}</span>{% endif %}
+        {% if key == 'kiem_ke' and THONG_BAO.cho_duyet %}<span class="rounded-full bg-amber-400 px-1.5 text-[10px] font-semibold text-amber-950">{{ THONG_BAO.cho_duyet }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </nav>
+    <div class="relative border-t border-white/10 bg-brand-900 px-4 py-4" x-data="{ open:false }">
+      <button class="flex w-full items-center gap-3 text-left" @click="open=!open">
+        <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-brand-800">{{ user.initials }}</span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-[13px] font-semibold">{{ user.ho_ten }}</span>
+          <span class="block text-[11px] text-white/60">{{ user.get_vai_tro_display }}</span>
+        </span>
+        <i data-lucide="chevrons-up-down" class="h-4 w-4 text-white/60"></i>
+      </button>
+      <div x-show="open" @click.outside="open=false" x-transition x-cloak
+           class="absolute bottom-full left-3 right-3 mb-2 overflow-hidden rounded-lg bg-white text-gray-700 shadow-xl ring-1 ring-black/5">
+        <a href="{% url 'doi_mat_khau' %}" class="flex items-center gap-2 px-4 py-2.5 hover:bg-gray-50"><i data-lucide="key-round" class="h-4 w-4"></i>Đổi mật khẩu</a>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+          <button class="flex w-full items-center gap-2 px-4 py-2.5 text-red-600 hover:bg-red-50"><i data-lucide="log-out" class="h-4 w-4"></i>Đăng xuất</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="flex min-w-0 flex-1 flex-col lg:pl-64">
+    <header class="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:px-8">
+      <button class="rounded-lg p-2 hover:bg-gray-100 lg:hidden" @click="sidebar=true"><i data-lucide="menu" class="h-5 w-5"></i></button>
+      <form action="/san-pham/" class="relative hidden w-full max-w-sm md:block">
+        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+        <input name="q" placeholder="Tìm kiếm sản phẩm trong Warehouse MS..." class="h-9 w-full rounded-lg border-gray-200 bg-gray-50 pl-9 pr-12 text-[13px] focus:border-brand-500 focus:ring-brand-500">
+        <kbd class="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-white px-1.5 text-[10px] text-gray-400">↵</kbd>
+      </form>
+      <div class="ml-auto flex items-center gap-3">
+        <div class="relative" x-data="{ open:false }">
+          <button class="relative grid h-9 w-9 place-items-center rounded-full hover:bg-gray-100" @click="open=!open" title="Thông báo">
+            <i data-lucide="bell" class="h-[18px] w-[18px] text-gray-600"></i>
+            {% if THONG_BAO.tong %}<span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>{% endif %}
+          </button>
+          <div x-show="open" @click.outside="open=false" x-transition x-cloak class="absolute right-0 mt-2 w-80 overflow-hidden rounded-xl bg-white shadow-xl ring-1 ring-black/5">
+            <div class="border-b px-4 py-3 text-sm font-semibold">Thông báo</div>
+            <a href="/" class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+              <span class="mt-0.5 grid h-8 w-8 place-items-center rounded-full bg-red-50 text-red-600"><i data-lucide="triangle-alert" class="h-4 w-4"></i></span>
+              <span><b>{{ THONG_BAO.canh_bao_ton }}</b> sản phẩm hết hàng / dưới ngưỡng tối thiểu<br><span class="text-xs text-gray-500">Xem Dashboard cảnh báo</span></span>
+            </a>
+            <a href="/nhap-kho/" class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+              <span class="mt-0.5 grid h-8 w-8 place-items-center rounded-full bg-amber-50 text-amber-600"><i data-lucide="truck" class="h-4 w-4"></i></span>
+              <span><b>{{ THONG_BAO.cho_giao }}</b> phiếu nhập chưa chốt<br><span class="text-xs text-gray-500">Chờ giao / đang giao</span></span>
+            </a>
+            {% if user.is_admin %}
+            <a href="/kiem-ke/?tt=CHO_DUYET" class="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+              <span class="mt-0.5 grid h-8 w-8 place-items-center rounded-full bg-brand-50 text-brand-700"><i data-lucide="clipboard-check" class="h-4 w-4"></i></span>
+              <span><b>{{ THONG_BAO.cho_duyet }}</b> phiếu kiểm kê chờ duyệt<br><span class="text-xs text-gray-500">Cần Quản lý xem xét</span></span>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        <div class="hidden h-8 w-px bg-gray-200 sm:block"></div>
+        <div class="hidden items-center gap-2.5 sm:flex">
+          <span class="grid h-9 w-9 place-items-center rounded-lg bg-brand-50 text-brand-700"><i data-lucide="warehouse" class="h-[18px] w-[18px]"></i></span>
+          <span class="leading-tight">
+            <span class="block text-[10px] uppercase tracking-wide text-gray-400">Chi nhánh hiện tại</span>
+            <span class="block text-[12.5px] font-semibold text-gray-800">Kho trung tâm · Hà Nội</span>
+          </span>
+        </div>
+        <span class="grid h-9 w-9 place-items-center rounded-full bg-brand-800 text-[11px] font-bold text-white" title="{{ user.ho_ten }}">{{ user.initials }}</span>
+      </div>
+    </header>
+
+    <main class="flex-1 px-4 py-6 lg:px-8">
+      {% block breadcrumb %}{% endblock %}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="flex flex-wrap justify-between gap-2 px-4 pb-5 text-[11px] text-gray-400 lg:px-8">
+      <span>Warehouse MS · Quản lý tập trung, vận hành chính xác.</span>
+      <span>G'Local Mart &amp; Cafe © {% now "Y" %}</span>
+    </footer>
+  </div>
+</div>
+{% endblock %}
+
+<!-- ============ TOASTS ============ -->
+{% if messages %}
+<div class="pointer-events-none fixed right-4 top-4 z-[60] flex w-[360px] max-w-[calc(100vw-2rem)] flex-col gap-2">
+  {% for m in messages %}
+  <div x-data="{ show:true }" x-init="setTimeout(()=>show=false, {% if m.level_tag == 'error' %}9000{% else %}5000{% endif %})" x-show="show" x-transition.duration.300ms
+       class="pointer-events-auto flex items-start gap-3 rounded-xl border bg-white p-3.5 shadow-lg
+       {% if m.level_tag == 'error' %}border-red-200{% elif m.level_tag == 'warning' %}border-amber-200{% elif m.level_tag == 'success' %}border-emerald-200{% else %}border-gray-200{% endif %}">
+    {% if m.level_tag == 'error' %}<i data-lucide="circle-x" class="mt-0.5 h-5 w-5 shrink-0 text-red-500"></i>
+    {% elif m.level_tag == 'warning' %}<i data-lucide="triangle-alert" class="mt-0.5 h-5 w-5 shrink-0 text-amber-500"></i>
+    {% elif m.level_tag == 'success' %}<i data-lucide="circle-check" class="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"></i>
+    {% else %}<i data-lucide="info" class="mt-0.5 h-5 w-5 shrink-0 text-blue-500"></i>{% endif %}
+    <p class="flex-1 text-[13px] leading-snug text-gray-700">{{ m }}</p>
+    <button @click="show=false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="h-4 w-4"></i></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+  // Định dạng số kiểu Việt Nam dùng chung cho các form Alpine
+  window.vn = (n, d = 3) => (Number(n) || 0).toLocaleString('vi-VN', { maximumFractionDigits: d });
+  window.vnd = n => vn(Math.round(Number(n) || 0), 0) + ' đ';
+  window.icons = () => window.lucide && lucide.createIcons();
+  window.jsonData = id => { const el = document.getElementById(id); return el ? JSON.parse(el.textContent) : null; };
+  // Modal Thêm/Sửa dùng chung; tự mở lại kèm lỗi khi server trả về form không hợp lệ
+  window.crud = (defaults) => ({
+    open: false, pk: '', f: { ...defaults }, e: {},
+    init() {
+      const m = jsonData('modal-data');
+      if (m) { this.pk = m.pk; this.f = { ...defaults, ...m.data }; this.e = m.errors || {}; this.open = true; }
+      this.$watch('open', v => v && this.$nextTick(icons));
+    },
+    create(extra = {}) { this.pk = ''; this.f = { ...defaults, ...extra }; this.e = {}; this.open = true; },
+    edit(obj) { this.pk = obj.pk; this.f = { ...defaults, ...obj }; this.e = {}; this.open = true; },
+  });
+  document.addEventListener('DOMContentLoaded', icons);
+  document.addEventListener('alpine:initialized', () => setTimeout(icons));
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

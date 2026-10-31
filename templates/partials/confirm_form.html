@@ -1,0 +1,4 @@
+{# Nút POST có hộp xác nhận. Tham số: action, label, cls, icon, msg #}
+<form method="post" action="{{ action }}" class="inline" onsubmit="return confirm('{{ msg|escapejs }}')">{% csrf_token %}
+  <button class="{{ cls|default:'btn btn-ghost' }}">{% if icon %}<i data-lucide="{{ icon }}"></i>{% endif %}{{ label }}</button>
+</form>

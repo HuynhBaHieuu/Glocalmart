@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Xuất kho{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400">Xuất kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">Danh sách phiếu xuất</span></nav>
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Phiếu xuất kho</h1>
+    <p class="mt-1 text-[13px] text-gray-500">Lập phiếu xuất bán hàng, hủy hàng hỏng/hết hạn hoặc điều chỉnh. Tồn kho chỉ bị trừ khi phiếu được xác nhận.</p>
+  </div>
+  <a href="{% url 'xuat_create' %}" class="btn btn-primary"><i data-lucide="plus"></i>Lập phiếu xuất</a>
+</div>
+
+<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="stat"><p class="text-[12px] text-gray-500">Tổng phiếu xuất</p><p class="mt-1 text-[26px] font-semibold">{{ tong }}</p></div>
+  <a href="?tt=CHUA_XAC_NHAN" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Chờ xác nhận</p><p class="mt-1 text-[26px] font-semibold">{{ cho }}</p><p class="text-[11px] text-amber-600">Chưa trừ tồn kho</p></a>
+  <a href="?tt=DA_XAC_NHAN" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Đã xác nhận</p><p class="mt-1 text-[26px] font-semibold">{{ da }}</p><p class="text-[11px] text-emerald-600">Đã trừ tồn kho</p></a>
+  <a href="?ld=HUY_HANG" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Phiếu hủy hàng</p><p class="mt-1 text-[26px] font-semibold">{{ huy_hang }}</p><p class="text-[11px] text-red-500">Hàng hỏng / hết hạn</p></a>
+</div>
+
+<div class="card mt-5 overflow-hidden">
+  <form class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <div class="mr-auto"><h3 class="text-[15px] font-semibold">Danh sách phiếu xuất kho</h3><p class="text-[11.5px] text-gray-500">Chọn phiếu “Chờ xác nhận” để kiểm tra và xác nhận.</p></div>
+    <select name="ld" class="input w-auto" onchange="this.form.submit()">
+      <option value="">Tất cả lý do</option>
+      {% for c, l in ly_do %}<option value="{{ c }}" {% if ld == c %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+    <select name="tt" class="input w-auto" onchange="this.form.submit()">
+      <option value="">Tất cả trạng thái</option>
+      {% for c, l in trang_thai %}<option value="{{ c }}" {% if tt == c %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+    <div class="relative w-full sm:w-64">
+      <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+      <input name="q" value="{{ q }}" placeholder="Tìm mã phiếu, người lập..." class="input pl-9">
+    </div>
+  </form>
+  <div class="overflow-x-auto">
+    <table class="tbl">
+      <thead><tr><th>Mã phiếu</th><th>Ngày lập</th><th>Lý do xuất</th><th class="text-center">Số SP</th><th>Người lập</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+      <tbody>
+      {% for p in page %}
+      <tr>
+        <td><a href="{% url 'xuat_detail' p.pk %}" class="font-semibold text-gray-900 hover:text-brand-700">{{ p.pk }}</a></td>
+        <td class="text-gray-500">{{ p.ngay_tao|d }}</td>
+        <td>{{ p.get_ly_do_xuat_display }}</td>
+        <td class="text-center">{{ p.chi_tiet.all|length }}</td>
+        <td class="text-gray-500">{{ p.nguoi_tao.ho_ten }}</td>
+        <td>{% badge p.trang_thai %}</td>
+        <td><a href="{% url 'xuat_detail' p.pk %}" class="text-[12px] font-medium text-brand-700 hover:underline">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}Xác nhận →{% else %}Xem{% endif %}</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Chưa có phiếu xuất nào.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with unit="phiếu" %}
+  <p class="border-t bg-gray-50 px-5 py-2.5 text-[11px] text-gray-500">Bấm vào mã phiếu để xem chi tiết. Phiếu “Chờ xác nhận” có thể sửa hoặc xác nhận; phiếu đã xác nhận chỉ có thể hủy kèm lý do (Quản trị viên).</p>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Đối soát {{ p.pk }}{% endblock %}
+{% block content %}
+<form method="post" x-data="doiSoat()" class="contents">
+{% csrf_token %}
+<nav class="mb-1 text-[11.5px] text-gray-400">Nhập kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">{{ p.pk }}</span></nav>
+<div class="mb-5 flex flex-wrap items-start gap-3">
+  <div class="mr-auto">
+    <h1 class="flex flex-wrap items-center gap-2 text-[22px] font-semibold text-brand-800">{{ p.pk }} — Kiểm tra, Đối soát &amp; Cập nhật Tồn kho {% badge p.trang_thai_giao %}</h1>
+    <p class="mt-1 text-[12.5px] text-gray-500">Phiếu nhập kho: {{ p.pk }} · Nhà cung cấp: {{ p.id_ncc.ten_ncc }} · Ngày tạo: {{ p.ngay_tao|d }}</p>
+  </div>
+  <a href="{% url 'nhap_detail' p.pk %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i>Quay lại</a>
+  <a href="{% url 'nhap_print' p.pk %}" target="_blank" class="btn btn-outline"><i data-lucide="printer"></i>In phiếu</a>
+</div>
+
+<div class="grid gap-5 xl:grid-cols-[1fr_290px]">
+  <div class="space-y-5">
+    <div class="card overflow-hidden">
+      <div class="card-head"><i data-lucide="file-text" class="h-4 w-4"></i>Thông tin phiếu nhập</div>
+      <div class="grid gap-4 p-5 text-[12.5px] sm:grid-cols-3">
+        <div><p class="text-gray-400">Mã phiếu nhập</p><p class="font-semibold">{{ p.pk }}</p></div>
+        <div><p class="text-gray-400">Nhà cung cấp</p><p class="font-semibold">{{ p.id_ncc.ten_ncc }}</p></div>
+        <div><p class="text-gray-400">Ngày đặt hàng</p><p class="font-semibold">{{ p.ngay_tao|d }}</p></div>
+        <div><p class="text-gray-400">Ngày giao hàng thực tế</p><p class="font-semibold">{% now "d/m/Y" %}</p></div>
+        <div><p class="text-gray-400">Người tạo phiếu</p><p class="font-semibold">{{ p.nguoi_tao.ho_ten }}</p></div>
+        <div><p class="text-gray-400">Người đối soát</p><p class="font-semibold">{{ user.ho_ten }}</p></div>
+        {% if p.ghi_chu %}<div class="sm:col-span-3"><p class="text-gray-400">Ghi chú đơn hàng</p><p>{{ p.ghi_chu }}</p></div>{% endif %}
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="card-head"><i data-lucide="clipboard-check" class="h-4 w-4"></i>Kiểm tra, Đối soát &amp; Cập nhật Tồn kho <span class="ml-auto rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px]">{{ chi_tiet|length }} sản phẩm</span></div>
+      <div class="overflow-x-auto">
+        <table class="tbl compact">
+          <thead><tr><th>#</th><th>Tên sản phẩm / Mã SKU</th><th>ĐVT</th><th class="text-right">SL đặt</th><th class="text-center">SL thực nhận</th><th class="text-center">Chênh lệch</th><th>Lý do chênh lệch</th><th>Hạn sử dụng</th><th class="text-right">Thành tiền</th></tr></thead>
+          <tbody>
+          <template x-for="(r, i) in rows" :key="r.id">
+            <tr :class="r.sl !== '' && Number(r.sl) !== r.dat ? 'bg-red-50/40' : ''">
+              <td class="text-gray-400" x-text="i + 1"></td>
+              <td class="min-w-[170px]"><p class="font-medium" x-text="r.ten"></p><p class="text-[11px] text-gray-400" x-text="'SKU: ' + r.ma"></p><p class="text-[11px] text-gray-400" x-text="'Đơn giá: ' + vn(r.gia,0) + ' đ / ' + r.dvt"></p></td>
+              <td x-text="r.dvt"></td>
+              <td class="text-right font-semibold" x-text="vn(r.dat)"></td>
+              <td><input type="number" min="0" step="any" :name="'sl_' + r.id" x-model="r.sl" class="input !w-20 !px-2 text-center font-semibold"
+                     :class="r.sl === '' ? '' : (Number(r.sl) === r.dat ? '!border-emerald-500 !bg-emerald-50 text-emerald-800' : '!border-red-400 !bg-red-50 text-red-700')"></td>
+              <td class="text-center"><span class="rounded px-1.5 py-0.5 text-[11.5px] font-semibold" x-show="r.sl !== ''"
+                     :class="diff(r) === 0 ? 'bg-emerald-50 text-emerald-700' : (diff(r) < 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600')" x-text="(diff(r) > 0 ? '+' : '') + vn(diff(r))"></span></td>
+              <td>
+                <select :name="'ly_do_' + r.id" x-model="r.ly_do" class="input !w-[112px] !py-1.5 !pl-2 text-[12px]" :disabled="r.sl === '' || diff(r) === 0"
+                        :class="r.sl !== '' && diff(r) !== 0 && !r.ly_do ? '!border-red-400' : ''">
+                  <option value="">—</option>
+                  {% for code, label in ly_do %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+                </select>
+              </td>
+              <td><input type="date" :name="'hsd_' + r.id" x-model="r.hsd" class="input !w-[132px] !px-2 !py-1.5 text-[12px]"></td>
+              <td class="whitespace-nowrap text-right"><p class="font-semibold" x-text="vn((Number(r.sl) || 0) * r.gia, 0) + ' đ'"></p><p class="text-[11px] text-red-500" x-show="r.sl !== '' && diff(r) < 0" x-text="'Đã trừ ' + vn(-diff(r) * r.gia, 0) + ' đ'"></p></td>
+            </tr>
+          </template>
+          </tbody>
+        </table>
+      </div>
+      <p class="flex items-center gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Lý do chênh lệch bắt buộc khi SL thực nhận ≠ SL đặt. Tùy chọn: Thiếu hàng / Hư hỏng / Giao nhầm. Hạn sử dụng của lô giúp hệ thống cảnh báo hết hạn.</p>
+    </div>
+
+    <div class="card p-5">
+      <label class="mb-2 flex items-center gap-2 text-[14px] font-semibold"><i data-lucide="pen-line" class="h-4 w-4"></i>Ghi chú đối soát</label>
+      <textarea name="ghi_chu_doi_soat" rows="3" class="input" placeholder="VD: 2 chai dầu ăn bị vỡ nắp trong quá trình vận chuyển...">{{ p.ghi_chu_doi_soat|default:"" }}</textarea>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-4">
+      <button name="action" value="luu_nhap" class="btn btn-outline"><i data-lucide="save"></i>Lưu bản nháp đối soát</button>
+      <span class="text-[11.5px] text-gray-500">Bản nháp đối soát được lưu vào phiếu, chưa cộng tồn kho.</span>
+      <button name="action" value="xac_nhan" class="btn btn-primary ml-auto" :disabled="!ready"
+              onclick="return confirm('Chốt phiếu Đã giao và tự động cộng tồn kho? Sau khi xác nhận phiếu sẽ bị khóa.')">
+        <i data-lucide="square-check"></i>Đã giao &amp; Tự động Cập nhật tồn kho</button>
+    </div>
+    <div class="text-[11.5px] leading-relaxed text-gray-500">
+      Khi bấm “Đã giao &amp; Tự động Cập nhật tồn kho”, hệ thống sẽ:<br>
+      — Chuyển trạng thái phiếu sang Đã giao / Đã xác nhận.<br>
+      — Tự động cộng đúng số lượng thực nhận vào tồn kho, tính lại giá vốn bình quân và cập nhật hạn sử dụng sớm nhất.<br>
+      — Khóa phiếu để tránh chỉnh sửa sau khi đã xác nhận.
+    </div>
+  </div>
+
+  <div class="space-y-5">
+    <div class="card overflow-hidden">
+      <div class="card-head"><i data-lucide="calculator" class="h-4 w-4"></i>Tóm tắt đối soát</div>
+      <div class="space-y-2.5 p-5 text-[12.5px]">
+        <div class="flex justify-between"><span class="text-gray-500">Tổng sản phẩm</span><b x-text="rows.length + ' SKU'"></b></div>
+        <hr>
+        <div class="flex justify-between"><span class="text-gray-500">Tổng SL đặt hàng</span><b x-text="vn(sum('dat'))"></b></div>
+        <div class="flex justify-between"><span class="text-gray-500">Tổng SL thực nhận</span><b x-text="vn(sumSl())"></b></div>
+        <div class="flex justify-between"><span class="text-gray-500">Tổng chênh lệch</span><span><b :class="sumSl() - sum('dat') < 0 ? 'text-red-600' : 'text-emerald-700'" x-text="vn(sumSl() - sum('dat'))"></b>
+          <span x-show="sumSl() !== sum('dat')" class="ml-1 rounded bg-red-50 px-1.5 text-[10.5px] text-red-600">Có chênh lệch</span></span></div>
+        <hr>
+        <p class="font-semibold">Phân loại chênh lệch</p>
+        {% for code, label in ly_do %}
+        <div class="flex justify-between"><span class="flex items-center gap-1.5 text-gray-500"><span class="h-2 w-2 rounded-full {% if code == 'THIEU_HANG' %}bg-amber-500{% elif code == 'HU_HONG' %}bg-red-500{% else %}bg-violet-500{% endif %}"></span>{{ label }}</span><b x-text="vn(byReason('{{ code }}'))"></b></div>
+        {% endfor %}
+        <hr>
+        <div class="flex justify-between"><span class="text-gray-500">Tổng giá trị thực tế</span><b class="text-[15px] text-brand-800" x-text="vnd(total())"></b></div>
+        <p class="text-[11px] text-gray-400">Giá trị ban đầu: <span x-text="vnd(rows.reduce((s,r)=>s+r.dat*r.gia,0))"></span></p>
+        <p x-show="!ready" class="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">Nhập đủ SL thực nhận và chọn lý do cho các dòng chênh lệch để chốt phiếu.</p>
+      </div>
+    </div>
+    <div class="card overflow-hidden">
+      <div class="flex items-center gap-2 border-b px-5 py-3.5 font-semibold"><i data-lucide="history" class="h-4 w-4"></i>Lịch sử trạng thái</div>
+      <ol class="space-y-3 p-5">
+        {% for l in lich_su %}
+        <li class="flex gap-3 text-[12px]"><span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-brand-800 text-white"><i data-lucide="check" class="h-3 w-3"></i></span>
+          <div><p class="font-semibold">{% if l.hanh_dong == 'TAO_PHIEU' %}Tạo phiếu nhập kho{% elif l.hanh_dong == 'CAP_NHAT_GIAO' %}Đang giao hàng{% elif l.hanh_dong == 'LUU_NHAP_DOI_SOAT' %}Lưu bản nháp đối soát{% else %}{{ l.hanh_dong }}{% endif %}</p><p class="text-gray-400">{{ l.ngay_tao|dt }} · {{ l.nguoi_dung.ho_ten|default:"Hệ thống" }}</p></div></li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+</div>
+</form>
+<script type="application/json" id="rows-data2">[{% for ct in chi_tiet %}{"id":{{ ct.pk }},"ten":"{{ ct.id_sp.ten_sp|escapejs }}","ma":"{{ ct.id_sp.ma_sp|escapejs }}","dvt":"{{ ct.id_sp.don_vi|escapejs }}","dat":{{ ct.so_luong_dat|num }},"gia":{{ ct.don_gia_nhap|num }},"sl":"{{ ct.so_luong_thuc_nhan|num }}","hsd":"{{ ct.han_su_dung|iso }}","ly_do":"{{ ct.ly_do_chenh_lech|default:'' }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
+{% endblock %}
+{% block scripts %}
+<script>
+function doiSoat() {
+  return {
+    rows: jsonData('rows-data2'),
+    diff(r) { return (Number(r.sl) || 0) - r.dat; },
+    sum(k) { return this.rows.reduce((s, r) => s + Number(r[k] || 0), 0); },
+    sumSl() { return this.rows.reduce((s, r) => s + (Number(r.sl) || 0), 0); },
+    byReason(code) { return this.rows.filter(r => r.ly_do === code && r.sl !== '').reduce((s, r) => s + this.diff(r), 0); },
+    total() { return this.rows.reduce((s, r) => s + (Number(r.sl) || 0) * r.gia, 0); },
+    get ready() { return this.rows.every(r => r.sl !== '' && Number(r.sl) >= 0 && (this.diff(r) === 0 || r.ly_do)); },
+  };
+}
+</script>
+{% endblock %}

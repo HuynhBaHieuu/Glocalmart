@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Nhà cung cấp{% endblock %}
+{% block content %}
+{{ modal|json_script:"modal-data" }}
+<div x-data="crud({ ma_ncc: '{{ goi_y_ma }}', ten_ncc: '', so_dien_thoai: '', email: '', dia_chi: '', trang_thai: '1' })">
+  <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <span class="font-medium text-brand-700">Đối tác</span></nav>
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Nhà cung cấp</h1>
+      <p class="mt-1 text-[13px] text-gray-500">Quản lý hồ sơ, thông tin liên hệ và trạng thái hợp tác của nhà cung cấp.</p>
+    </div>
+    {% if user.is_admin %}<button class="btn btn-primary" @click="create()"><i data-lucide="plus"></i>Thêm nhà cung cấp</button>{% endif %}
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tổng nhà cung cấp</p><p class="mt-1 text-[28px] font-semibold">{{ tong }}</p><p class="text-[11px] text-gray-400">{{ dang_hd }} đang hoạt động</p></div><span class="stat-icon"><i data-lucide="users" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Đang hợp tác</p><p class="mt-1 text-[28px] font-semibold">{{ dang_hd }}</p><p class="text-[11px] text-gray-400">Sẵn sàng tạo phiếu nhập</p></div><span class="stat-icon"><i data-lucide="truck" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Đã phát sinh giao dịch</p><p class="mt-1 text-[28px] font-semibold">{{ co_phieu }}</p><p class="text-[11px] text-gray-400">Có ít nhất 1 phiếu nhập</p></div><span class="stat-icon"><i data-lucide="building-2" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Ngừng hoạt động</p><p class="mt-1 text-[28px] font-semibold">{{ ngung }}</p><p class="text-[11px] text-gray-400">Lưu trữ hồ sơ và lịch sử giao dịch</p></div><span class="stat-icon"><i data-lucide="archive" class="h-4 w-4"></i></span></div>
+  </div>
+
+  <div class="card mt-5 overflow-hidden">
+    <div class="flex flex-wrap items-center border-b px-5">
+      <a href="?" class="tab active">Nhà cung cấp <span class="count">{{ tong }}</span></a>
+      <a href="{% url 'ncc_export' %}{% qs page=None %}" class="btn btn-ghost my-2 ml-auto"><i data-lucide="download"></i>Xuất danh sách</a>
+    </div>
+    <form class="flex flex-wrap items-center gap-3 px-5 py-3.5">
+      <div class="relative min-w-[240px] flex-1 md:max-w-sm">
+        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+        <input name="q" value="{{ q }}" placeholder="Tìm theo mã, tên hoặc số điện thoại..." class="input pl-9">
+      </div>
+      <select name="tt" class="input w-auto" onchange="this.form.submit()">
+        <option value="">Tất cả trạng thái</option>
+        <option value="1" {% if tt == "1" %}selected{% endif %}>Đang hoạt động</option>
+        <option value="0" {% if tt == "0" %}selected{% endif %}>Ngừng hoạt động</option>
+      </select>
+      <span class="ml-auto text-[12px] text-gray-500"><b class="text-gray-800">{{ page.paginator.count }}</b> nhà cung cấp</span>
+    </form>
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead><tr><th>Mã đối tác</th><th>Tên doanh nghiệp / NCC</th><th>Thông tin liên hệ</th><th class="text-center">Số phiếu nhập</th><th>Trạng thái</th>{% if user.is_admin %}<th>Thao tác</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for n in page %}
+        <tr class="{% if not n.trang_thai %}bg-gray-50/60{% endif %}">
+          <td class="text-gray-500">{{ n.ma_ncc }}</td>
+          <td><p class="font-medium text-gray-900">{{ n.ten_ncc }}</p><p class="text-[11px] text-gray-400">{{ n.dia_chi }}</p></td>
+          <td><p>{{ n.so_dien_thoai }}</p><p class="text-[11px] text-gray-400">{{ n.email|default:"—" }}</p></td>
+          <td class="text-center"><a href="/nhap-kho/?q={{ n.ten_ncc|urlencode }}" class="font-medium hover:text-brand-700">{{ n.so_phieu }}</a></td>
+          <td>{% if n.trang_thai %}{% dot_badge True "Active" %}{% else %}{% dot_badge False "" "Ngừng hoạt động" %}<p class="mt-0.5 text-[10.5px] text-gray-400">Hồ sơ được giữ lại</p>{% endif %}</td>
+          {% if user.is_admin %}
+          <td>
+            <div class="flex items-center gap-3 whitespace-nowrap text-[12px]">
+              <button class="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-brand-700"
+                      @click="edit({pk:'{{ n.pk }}', ma_ncc:'{{ n.ma_ncc|escapejs }}', ten_ncc:'{{ n.ten_ncc|escapejs }}', so_dien_thoai:'{{ n.so_dien_thoai|escapejs }}', email:'{{ n.email|default:''|escapejs }}', dia_chi:'{{ n.dia_chi|escapejs }}', trang_thai:'{{ n.trang_thai }}'})">
+                <i data-lucide="square-pen" class="h-3.5 w-3.5"></i>Sửa</button>
+              <form method="post" action="{% url 'ncc_toggle' n.pk %}" onsubmit="return confirm('{% if n.trang_thai %}Ngừng hợp tác{% else %}Kích hoạt lại{% endif %} với {{ n.ten_ncc|escapejs }}?')">{% csrf_token %}
+                <button class="inline-flex items-center gap-1 {% if n.trang_thai %}text-gray-400 hover:text-red-600{% else %}text-brand-700{% endif %}"><i data-lucide="{% if n.trang_thai %}circle-off{% else %}rotate-ccw{% endif %}" class="h-3.5 w-3.5"></i>{% if n.trang_thai %}Ngừng hoạt động{% else %}Kích hoạt lại{% endif %}</button>
+              </form>
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}<tr><td colspan="6" class="py-10 text-center text-gray-400">Không có nhà cung cấp phù hợp.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with unit="nhà cung cấp" %}
+    <div class="flex items-center gap-2 border-t bg-gray-50 px-5 py-2.5 text-[11px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Ngừng hoạt động là xóa mềm: hồ sơ đối tác và lịch sử giao dịch được giữ lại, có thể khôi phục bất cứ lúc nào.</div>
+  </div>
+
+  {% if user.is_admin %}
+  <div x-show="open" x-transition.opacity x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" @keydown.escape.window="open=false">
+    <form method="post" action="{% url 'ncc_save' %}" class="w-full max-w-xl rounded-2xl bg-white shadow-2xl" @click.outside="open=false">
+      {% csrf_token %}
+      <input type="hidden" name="pk" :value="pk">
+      <input type="hidden" name="trang_thai" :value="f.trang_thai">
+      <div class="flex items-start gap-3 border-b px-6 py-5">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="truck" class="h-5 w-5"></i></span>
+        <div class="flex-1"><h3 class="text-[18px] font-semibold" x-text="pk ? 'Chỉnh sửa nhà cung cấp' : 'Thêm nhà cung cấp'"></h3><p class="text-[12px] text-gray-500">Tạo hồ sơ đối tác cung ứng hàng hóa cho kho.</p></div>
+        <button type="button" @click="open=false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+        <div>
+          <label class="label">Mã NCC <span class="text-red-500">*</span> <span class="err-text" x-text="e.ma_ncc"></span></label>
+          <input name="ma_ncc" x-model="f.ma_ncc" class="input" :class="e.ma_ncc && 'err'" placeholder="VD: NCC-001">
+          <p class="hint">Mã là duy nhất, không trùng với nhà cung cấp khác.</p>
+        </div>
+        <div>
+          <label class="label">Số điện thoại <span class="text-red-500">*</span> <span class="err-text" x-text="e.so_dien_thoai"></span></label>
+          <input name="so_dien_thoai" x-model="f.so_dien_thoai" class="input" :class="e.so_dien_thoai && 'err'" placeholder="VD: 028 3812 3456">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Tên nhà cung cấp <span class="text-red-500">*</span> <span class="err-text" x-text="e.ten_ncc"></span></label>
+          <input name="ten_ncc" x-model="f.ten_ncc" class="input" :class="e.ten_ncc && 'err'" placeholder="VD: Công ty TNHH Thương Nhất">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Email <span class="font-normal text-gray-400">(không bắt buộc)</span> <span class="err-text" x-text="e.email"></span></label>
+          <input name="email" type="email" x-model="f.email" class="input" :class="e.email && 'err'" placeholder="sales@congty.vn">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Địa chỉ <span class="text-red-500">*</span> <span class="err-text" x-text="e.dia_chi"></span></label>
+          <textarea name="dia_chi" x-model="f.dia_chi" rows="2" class="input" :class="e.dia_chi && 'err'" placeholder="Số nhà, đường, phường/xã, tỉnh/thành"></textarea>
+        </div>
+        <div class="sm:col-span-2 rounded-xl bg-gray-50 p-3 text-[12px] text-gray-500">
+          <span class="font-semibold text-gray-700">Trạng thái: </span><span x-text="f.trang_thai == '1' ? '● Đang hoạt động' : '● Ngừng hoạt động'" :class="f.trang_thai == '1' ? 'text-emerald-700' : 'text-gray-500'"></span>
+          — đổi trạng thái bằng nút “Ngừng hoạt động / Kích hoạt lại” ở danh sách.
+        </div>
+      </div>
+      <div class="flex items-center justify-between rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+        <span class="text-[11px] text-gray-400">* Thông tin bắt buộc</span>
+        <div class="flex gap-2"><button type="button" class="btn btn-ghost" @click="open=false">Hủy</button><button class="btn btn-primary">Lưu nhà cung cấp</button></div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

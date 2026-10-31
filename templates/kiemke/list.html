@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Kiểm kê{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <span class="font-medium text-gray-700">Kiểm kê</span></nav>
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Kiểm kê hàng hóa (Stock Audit)</h1>
+    <p class="mt-1 text-[13px] text-gray-500">Kiểm kê mù 2 bước: nhân viên đếm không thấy tồn hệ thống, dòng lệch được đếm lại lần 2 trước khi gửi Quản lý duyệt.</p>
+  </div>
+  <a href="{% url 'kiem_create' %}" class="btn btn-primary"><i data-lucide="plus"></i>Tạo phiếu kiểm kê</a>
+</div>
+
+<div class="mb-4 flex flex-wrap gap-2">
+  <a href="?" class="rounded-full px-3 py-1.5 text-[12px] font-medium {% if not tt %}bg-brand-800 text-white{% else %}bg-white text-gray-600 ring-1 ring-gray-200{% endif %}">Tất cả</a>
+  {% for c, l in trang_thai %}
+  <a href="?tt={{ c }}" class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium {% if tt == c %}bg-brand-800 text-white{% else %}bg-white text-gray-600 ring-1 ring-gray-200{% endif %}">{{ l }}{% for k, v in dem.items %}{% if k == c %}<span class="rounded-full {% if tt == c %}bg-white/20{% else %}bg-gray-100{% endif %} px-1.5 text-[10.5px]">{{ v }}</span>{% endif %}{% endfor %}</a>
+  {% endfor %}
+</div>
+
+<div class="card overflow-hidden">
+  <form class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <input type="hidden" name="tt" value="{{ tt }}">
+    <div class="relative w-full sm:w-72">
+      <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+      <input name="q" value="{{ q }}" placeholder="Tìm mã phiếu, người thực hiện..." class="input pl-9">
+    </div>
+  </form>
+  <div class="overflow-x-auto">
+    <table class="tbl">
+      <thead><tr><th>Mã phiếu</th><th>Ngày tạo</th><th>Người thực hiện</th><th class="text-center">Số SP</th><th>Người duyệt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+      <tbody>
+      {% for p in page %}
+      <tr>
+        <td><a href="{% url 'kiem_detail' p.pk %}" class="font-semibold text-brand-800 hover:underline">{{ p.pk }}</a></td>
+        <td class="text-gray-500">{{ p.ngay_tao|d }}</td>
+        <td>{{ p.nguoi_tao.ho_ten }}</td>
+        <td class="text-center">{{ p.chi_tiet.all|length }}</td>
+        <td class="text-gray-500">{{ p.nguoi_duyet.ho_ten|default:"—" }}</td>
+        <td>{% badge p.trang_thai %}{% if p.trang_thai == 'DANG_KIEM' and p.can_dem_lan_2 %} <span class="text-[11px] text-orange-600">· chờ đếm lần 2</span>{% endif %}</td>
+        <td><a href="{% url 'kiem_detail' p.pk %}" class="text-[12.5px] font-semibold text-brand-800 hover:underline">{% if p.trang_thai == 'CHO_DUYET' and user.is_admin %}Duyệt phiếu{% elif p.trang_thai == 'DANG_KIEM' %}Tiếp tục đếm{% else %}Xem chi tiết{% endif %}</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Chưa có phiếu kiểm kê.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with unit="phiếu" %}
+</div>
+
+<a href="{% url 'kiem_create' %}" title="Tạo phiếu kiểm kê" class="fixed bottom-8 right-8 z-10 grid h-14 w-14 place-items-center rounded-full bg-brand-800 text-white shadow-xl hover:bg-brand-900"><i data-lucide="plus" class="h-6 w-6"></i></a>
+{% endblock %}

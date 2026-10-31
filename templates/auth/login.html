@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Đăng nhập{% endblock %}
+{% block body %}
+<div class="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
+  <!-- Bên trái: nhận diện thương hiệu -->
+  <section class="relative hidden overflow-hidden bg-brand-800 text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
+    <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/5"></div>
+    <div class="absolute -bottom-32 -left-20 h-[28rem] w-[28rem] rounded-full bg-brand-900/60"></div>
+    <div class="relative flex items-center gap-3">
+      <span class="grid h-11 w-11 place-items-center rounded-xl bg-white text-brand-800"><i data-lucide="package" class="h-6 w-6"></i></span>
+      <div>
+        <p class="text-lg font-bold leading-tight">G'Local Mart WH</p>
+        <p class="text-xs text-white/60">Warehouse Management System</p>
+      </div>
+    </div>
+    <div class="relative max-w-md">
+      <h1 class="text-[34px] font-semibold leading-tight">Quản lý kho &amp; chuỗi cung ứng<br>G'Local Mart &amp; Cafe</h1>
+      <p class="mt-4 text-[14px] leading-relaxed text-white/70">Số hóa toàn bộ quy trình Nhập – Xuất – Tồn, kiểm kê mù 2 bước và cảnh báo tồn kho, hạn sử dụng theo thời gian thực.</p>
+      <div class="mt-8 grid grid-cols-3 gap-3 text-center">
+        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="arrow-down-left" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Nhập kho</p></div>
+        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="arrow-up-right" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Xuất kho</p></div>
+        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="clipboard-check" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Kiểm kê</p></div>
+      </div>
+    </div>
+    <p class="relative text-xs text-white/50">Quản lý tập trung, vận hành chính xác.</p>
+  </section>
+
+  <!-- Bên phải: form -->
+  <section class="flex items-center justify-center bg-page p-6">
+    <div class="w-full max-w-[400px]">
+      <div class="mb-8 flex items-center gap-3 lg:hidden">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-800 text-white"><i data-lucide="package" class="h-5 w-5"></i></span>
+        <p class="text-lg font-bold text-brand-800">G'Local Mart WH</p>
+      </div>
+      <h2 class="text-[26px] font-semibold text-gray-900">Đăng nhập</h2>
+      <p class="mt-1 text-[13px] text-gray-500">Sử dụng tài khoản do Quản trị viên cấp để truy cập hệ thống.</p>
+
+      {% if error %}
+      <div class="mt-6 flex items-start gap-2.5 rounded-xl border {% if locked %}border-red-300 bg-red-50 text-red-700{% else %}border-red-200 bg-red-50 text-red-600{% endif %} px-4 py-3 text-[13px]">
+        <i data-lucide="{% if locked %}lock{% else %}circle-alert{% endif %}" class="mt-0.5 h-4 w-4 shrink-0"></i>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" class="mt-6 space-y-4" x-data="{ show:false }">
+        {% csrf_token %}
+        <div>
+          <label class="label" for="username">Tên đăng nhập</label>
+          <div class="relative">
+            <i data-lucide="user" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+            <input id="username" name="username" value="{{ username }}" autofocus autocomplete="username" required
+                   class="input h-11 pl-9 {% if error %}err{% endif %}" placeholder="VD: admin">
+          </div>
+        </div>
+        <div>
+          <label class="label" for="password">Mật khẩu</label>
+          <div class="relative">
+            <i data-lucide="lock" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+            <input id="password" name="password" :type="show ? 'text' : 'password'" type="password" autocomplete="current-password" required
+                   class="input h-11 pl-9 pr-10 {% if error %}err{% endif %}" placeholder="••••••••">
+            <button type="button" @click="show=!show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabindex="-1">
+              <i data-lucide="eye" class="h-4 w-4"></i>
+            </button>
+          </div>
+        </div>
+        <button class="btn btn-primary h-11 w-full text-[14px]">Đăng nhập <i data-lucide="arrow-right"></i></button>
+      </form>
+
+      <div class="mt-6 rounded-xl border border-dashed border-brand-200 bg-white p-4 text-[12px] text-gray-600">
+        <p class="mb-1.5 font-semibold text-brand-800">Tài khoản demo</p>
+        <p>Quản trị viên: <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">admin</code> / <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">Admin@123</code></p>
+        <p class="mt-1">Nhân viên: <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">nvkho_002</code> / <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">Nhanvien@123</code></p>
+        <p class="mt-2 text-[11px] text-gray-400">Nhập sai mật khẩu 5 lần liên tiếp, tài khoản sẽ bị tạm khóa.</p>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

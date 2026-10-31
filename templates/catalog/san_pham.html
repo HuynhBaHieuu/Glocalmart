@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Sản phẩm{% endblock %}
+{% block content %}
+{{ modal|json_script:"modal-data" }}
+<div x-data="crud({ ma_sp: '{{ goi_y_ma }}', ten_sp: '', mo_ta: '', id_danhmuc: '', don_vi: '', gia_ban: '', nguong_toi_thieu: '10', han_su_dung: '', so_ngay_canh_bao: '30', anh_sp: '', gia_von: 0, ton_kho: 0, trang_thai: 1 })">
+  <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <span class="font-medium text-brand-700">Sản phẩm</span></nav>
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Sản phẩm <span class="text-[12px] font-normal text-gray-500">Product Management</span></h1>
+      <p class="mt-1 text-[13px] text-gray-500">Quản lý thông tin, giá bán và trạng thái kinh doanh của sản phẩm.</p>
+    </div>
+    {% if user.is_admin %}<button class="btn btn-primary" @click="create()"><i data-lucide="plus"></i>Thêm sản phẩm mới</button>{% endif %}
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    {% for key, label, count in tabs %}
+    <div class="stat flex items-start justify-between">
+      <div>
+        <p class="text-[12px] text-gray-500">{% if key == 'tat_ca' %}Tổng sản phẩm{% elif key == 'dang_ban' %}Đang kinh doanh{% else %}Ngừng kinh doanh{% endif %}</p>
+        <p class="mt-1 text-[28px] font-semibold">{{ count }}</p>
+        <p class="text-[11px] text-gray-400">{% if key == 'tat_ca' %}Trong toàn bộ danh mục{% elif key == 'dang_ban' %}Sẵn sàng cho nghiệp vụ kho{% else %}Lưu trữ lịch sử sản phẩm{% endif %}</p>
+      </div>
+      <span class="stat-icon"><i data-lucide="{% if key == 'tat_ca' %}package{% elif key == 'dang_ban' %}circle-check{% else %}archive{% endif %}" class="h-4 w-4"></i></span>
+    </div>
+    {% endfor %}
+    <div class="stat flex items-start justify-between">
+      <div><p class="text-[12px] text-gray-500">Danh mục sản phẩm</p><p class="mt-1 text-[28px] font-semibold">{{ so_dm }}</p><p class="text-[11px] text-gray-400">Phân loại theo nhóm hàng</p></div>
+      <span class="stat-icon"><i data-lucide="layout-grid" class="h-4 w-4"></i></span>
+    </div>
+  </div>
+
+  <div class="card mt-5 overflow-hidden">
+    <div class="flex flex-wrap items-center border-b px-5">
+      {% for key, label, count in tabs %}
+      <a href="{% qs tab=key page=None %}" class="tab {% if tab == key %}active{% endif %}">{{ label }}<span class="count">{{ count }}</span></a>
+      {% endfor %}
+      <a href="{% url 'san_pham_export' %}{% qs page=None %}" class="btn btn-ghost my-2 ml-auto"><i data-lucide="download"></i>Xuất danh sách</a>
+    </div>
+    <form class="flex flex-wrap items-center gap-3 px-5 py-3.5">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <div class="relative min-w-[220px] flex-1 md:max-w-xs">
+        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+        <input name="q" value="{{ q }}" placeholder="Tìm theo mã hoặc tên sản phẩm..." class="input pl-9">
+      </div>
+      <select name="dm" class="input w-auto" onchange="this.form.submit()">
+        <option value="">Tất cả danh mục</option>
+        {% for d in danh_muc %}<option value="{{ d.pk }}" {% if dm == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.ten_danhmuc }}</option>{% endfor %}
+      </select>
+      <select name="cb" class="input w-auto" onchange="this.form.submit()">
+        <option value="">Tất cả mức tồn</option>
+        <option value="het" {% if cb == 'het' %}selected{% endif %}>Đã hết hàng</option>
+        <option value="sap_het" {% if cb == 'sap_het' %}selected{% endif %}>Sắp hết hàng</option>
+      </select>
+      <span class="ml-auto text-[12px] text-gray-500"><b class="text-gray-800">{{ page.paginator.count }}</b> sản phẩm</span>
+    </form>
+    <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
+      <i data-lucide="lock" class="h-3.5 w-3.5 text-brand-700"></i><b class="text-brand-800">Tồn kho chỉ đọc.</b> Số lượng chỉ được cập nhật qua nghiệp vụ nhập, xuất và kiểm kê — không chỉnh sửa tại sản phẩm.
+    </div>
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead><tr>
+          <th><a href="{% if sort == 'ma_sp' %}{% qs sort='-ma_sp' %}{% else %}{% qs sort='ma_sp' %}{% endif %}">Mã SP</a></th><th>Ảnh</th>
+          <th><a href="{% if sort == 'ten_sp' %}{% qs sort='-ten_sp' %}{% else %}{% qs sort='ten_sp' %}{% endif %}" class="inline-flex items-center gap-1">Tên sản phẩm <i data-lucide="arrow-up-down" class="h-3 w-3"></i></a></th>
+          <th>Danh mục</th><th>Đơn vị</th>
+          <th class="text-right"><a href="{% if sort == 'gia_ban' %}{% qs sort='-gia_ban' %}{% else %}{% qs sort='gia_ban' %}{% endif %}">Giá bán (đ)</a></th>
+          <th class="text-right"><a href="{% if sort == 'ton_kho' %}{% qs sort='-ton_kho' %}{% else %}{% qs sort='ton_kho' %}{% endif %}" class="inline-flex items-center gap-1">Tồn kho <i data-lucide="lock" class="h-3 w-3"></i></a></th>
+          <th>Trạng thái</th><th>Thao tác</th>
+        </tr></thead>
+        <tbody>
+        {% for s in page %}
+        <tr class="{% if xem.pk == s.pk %}bg-brand-50/50{% endif %}">
+          <td class="text-gray-500">{{ s.ma_sp }}</td>
+          <td>
+            {% if s.anh_sp %}<img src="{{ s.anh_sp }}" alt="" class="h-10 w-10 rounded-lg border object-cover">
+            {% else %}<span class="grid h-10 w-10 place-items-center rounded-lg border bg-gray-50 text-gray-300"><i data-lucide="image" class="h-4 w-4"></i></span>{% endif %}
+          </td>
+          <td><a href="{% qs xem=s.pk %}" class="font-medium text-gray-900 hover:text-brand-700">{{ s.ten_sp }}</a><p class="text-[11px] text-gray-400">{{ s.mo_ta|default:"" }}</p></td>
+          <td class="text-gray-500">{{ s.id_danhmuc.ten_danhmuc }}</td>
+          <td>{{ s.don_vi }}</td>
+          <td class="text-right font-medium">{{ s.gia_ban|money }}</td>
+          <td class="text-right">
+            <span class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px]
+              {% if s.muc_ton == 'HET_HANG' %}border-red-200 bg-red-50 text-red-600{% elif s.muc_ton == 'SAP_HET' %}border-orange-200 bg-orange-50 text-orange-600{% else %}border-gray-200 bg-gray-50 text-gray-700{% endif %}">
+              <i data-lucide="lock" class="h-3 w-3 opacity-60"></i>{{ s.ton_kho|qty }}</span>
+          </td>
+          <td>{% if s.trang_thai %}{% dot_badge True "Đang bán" %}{% else %}{% dot_badge False "" "Ngừng bán" %}{% endif %}</td>
+          <td>
+            <div class="flex items-center gap-3 whitespace-nowrap text-[12px]">
+              <a href="{% qs xem=s.pk %}" class="inline-flex items-center gap-1 font-medium text-gray-600 hover:text-brand-700"><i data-lucide="eye" class="h-3.5 w-3.5"></i>Xem</a>
+              {% if user.is_admin %}
+              <button class="inline-flex items-center gap-1 font-medium text-gray-700 hover:text-brand-700" @click="edit(JSON.parse(document.getElementById('sp-{{ s.pk }}').textContent))"><i data-lucide="square-pen" class="h-3.5 w-3.5"></i>Sửa</button>
+              <form method="post" action="{% url 'san_pham_toggle' s.pk %}" onsubmit="return confirm('{% if s.trang_thai %}Ngừng kinh doanh{% else %}Mở bán lại{% endif %} sản phẩm {{ s.ma_sp }}?')">{% csrf_token %}
+                <button class="inline-flex items-center gap-1 {% if s.trang_thai %}text-gray-400 hover:text-red-600{% else %}text-brand-700{% endif %}"><i data-lucide="{% if s.trang_thai %}circle-off{% else %}rotate-ccw{% endif %}" class="h-3.5 w-3.5"></i>{% if s.trang_thai %}Ngừng bán{% else %}Mở bán{% endif %}</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="9" class="py-10 text-center text-gray-400">Không có sản phẩm phù hợp.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "partials/pagination.html" with unit="sản phẩm" %}
+    <div class="border-t bg-gray-50 px-5 py-2.5 text-[11px] text-gray-500">Ngừng kinh doanh là xóa mềm: sản phẩm và lịch sử giao dịch được giữ lại, có thể khôi phục bất cứ lúc nào.</div>
+  </div>
+
+  {# dữ liệu từng dòng cho modal sửa #}
+  {% for s in page %}
+  <script type="application/json" id="sp-{{ s.pk }}">{"pk":"{{ s.pk }}","ma_sp":"{{ s.ma_sp|escapejs }}","ten_sp":"{{ s.ten_sp|escapejs }}","mo_ta":"{{ s.mo_ta|escapejs }}","id_danhmuc":"{{ s.id_danhmuc_id }}","don_vi":"{{ s.don_vi|escapejs }}","gia_ban":"{{ s.gia_ban|num }}","nguong_toi_thieu":"{{ s.nguong_toi_thieu|num }}","han_su_dung":"{{ s.han_su_dung|iso }}","so_ngay_canh_bao":"{{ s.so_ngay_canh_bao }}","anh_sp":"{{ s.anh_sp|default:''|escapejs }}","gia_von":"{{ s.gia_von|num }}","ton_kho":"{{ s.ton_kho|num }}","trang_thai":{{ s.trang_thai }}}</script>
+  {% endfor %}
+
+  {% if xem %}
+  <!-- Drawer chi tiết -->
+  <div x-data="{ show:true }" x-show="show" x-cloak class="fixed inset-0 z-40">
+    <a href="{% qs xem=None %}" class="absolute inset-0 bg-black/30"></a>
+    <aside x-show="show" x-transition:enter="transition duration-200" x-transition:enter-start="translate-x-full" class="absolute inset-y-0 right-0 flex w-full max-w-md flex-col bg-white shadow-2xl">
+      <div class="flex items-start gap-4 border-b p-6">
+        {% if xem.anh_sp %}<img src="{{ xem.anh_sp }}" class="h-20 w-20 rounded-xl border object-cover" alt="">
+        {% else %}<span class="grid h-20 w-20 place-items-center rounded-xl border bg-gray-50 text-gray-300"><i data-lucide="image" class="h-7 w-7"></i></span>{% endif %}
+        <div class="flex-1">
+          <h3 class="text-[18px] font-semibold text-gray-900">{{ xem.ten_sp }}</h3>
+          <p class="text-[12px] text-gray-500">{{ xem.ma_sp }}</p>
+          <div class="mt-2 flex flex-wrap gap-1">{% if xem.trang_thai %}{% dot_badge True "Đang bán" %}{% else %}{% dot_badge False "" "Ngừng bán" %}{% endif %}{% if xem.muc_ton != 'AN_TOAN' %}{% badge xem.muc_ton %}{% endif %}{% if xem.muc_han and xem.muc_han != 'CON_HAN' %}{% badge xem.muc_han %}{% endif %}</div>
+        </div>
+        <a href="{% qs xem=None %}" class="grid h-8 w-8 place-items-center rounded-lg bg-gray-100 text-gray-500 hover:bg-gray-200"><i data-lucide="x" class="h-4 w-4"></i></a>
+      </div>
+      <div class="flex-1 overflow-y-auto">
+        <section class="border-b px-6 py-4">
+          <p class="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Thông tin chung</p>
+          <dl class="space-y-2.5 text-[13px]">
+            <div class="flex justify-between"><dt class="text-gray-500">Mã sản phẩm</dt><dd class="font-medium">{{ xem.ma_sp }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Tên sản phẩm</dt><dd class="font-medium">{{ xem.ten_sp }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Danh mục</dt><dd class="font-medium">{{ xem.id_danhmuc.duong_dan }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Đơn vị tính</dt><dd class="font-medium">{{ xem.don_vi }}</dd></div>
+            {% if xem.mo_ta %}<div class="flex justify-between gap-4"><dt class="text-gray-500">Mô tả</dt><dd class="text-right">{{ xem.mo_ta }}</dd></div>{% endif %}
+          </dl>
+        </section>
+        <section class="border-b px-6 py-4">
+          <p class="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Giá</p>
+          <dl class="space-y-2.5 text-[13px]">
+            <div class="flex justify-between"><dt class="text-gray-500">Giá bán</dt><dd class="font-semibold">{{ xem.gia_ban|vnd }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Giá vốn trung bình</dt><dd class="flex items-center gap-1 font-semibold"><i data-lucide="lock" class="h-3 w-3 text-gray-400"></i>{{ xem.gia_von|vnd }}</dd></div>
+          </dl>
+        </section>
+        <section class="border-b px-6 py-4">
+          <p class="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Tồn kho &amp; cảnh báo</p>
+          <dl class="space-y-2.5 text-[13px]">
+            <div class="flex justify-between"><dt class="text-gray-500">Số lượng tồn hiện tại</dt><dd class="flex items-center gap-1 font-semibold text-brand-700"><i data-lucide="lock" class="h-3 w-3"></i>{{ xem.ton_kho|qty }} {{ xem.don_vi }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Ngưỡng tối thiểu</dt><dd>{{ xem.nguong_toi_thieu|qty }} {{ xem.don_vi }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Hạn sử dụng</dt><dd>{{ xem.han_su_dung|d }}{% if xem.so_ngay_con_lai is not None %} <span class="text-[11px] text-gray-400">({{ xem.so_ngay_con_lai }} ngày)</span>{% endif %}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Cảnh báo HSD trước</dt><dd>{{ xem.so_ngay_canh_bao }} ngày</dd></div>
+          </dl>
+          <p class="mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11.5px] text-gray-500"><i data-lucide="lock" class="h-3.5 w-3.5"></i>Số lượng chỉ được cập nhật qua nghiệp vụ nhập, xuất và điều chỉnh kho.</p>
+        </section>
+        <section class="px-6 py-4">
+          <p class="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Thông tin hệ thống</p>
+          <dl class="space-y-2 text-[12px] text-gray-500">
+            <div class="flex justify-between"><dt>ID</dt><dd>{{ xem.pk }}</dd></div>
+            <div class="flex justify-between"><dt>Ngày tạo</dt><dd>{{ xem.ngay_tao|dt }}</dd></div>
+            <div class="flex justify-between"><dt>Cập nhật lần cuối</dt><dd>{{ xem.ngay_cap_nhat|dt }}</dd></div>
+          </dl>
+        </section>
+      </div>
+      {% if user.is_admin %}
+      <div class="grid grid-cols-3 gap-2 border-t p-4">
+        <button class="btn btn-primary" @click="show=false; $dispatch('edit-sp')"><i data-lucide="square-pen"></i>Sửa</button>
+        <form method="post" action="{% url 'san_pham_toggle' xem.pk %}">{% csrf_token %}
+          <button class="btn btn-ghost w-full"><i data-lucide="{% if xem.trang_thai %}circle-off{% else %}rotate-ccw{% endif %}"></i>{% if xem.trang_thai %}Ngừng bán{% else %}Mở bán{% endif %}</button>
+        </form>
+        <form method="post" action="{% url 'san_pham_delete' xem.pk %}" onsubmit="return confirm('Xóa sản phẩm {{ xem.ma_sp }}? Nếu đã phát sinh giao dịch, sản phẩm sẽ được chuyển sang Ngừng hoạt động.')">{% csrf_token %}
+          <button class="btn btn-danger w-full"><i data-lucide="trash-2"></i>Xóa</button>
+        </form>
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+  <script type="application/json" id="sp-xem">{"pk":"{{ xem.pk }}","ma_sp":"{{ xem.ma_sp|escapejs }}","ten_sp":"{{ xem.ten_sp|escapejs }}","mo_ta":"{{ xem.mo_ta|escapejs }}","id_danhmuc":"{{ xem.id_danhmuc_id }}","don_vi":"{{ xem.don_vi|escapejs }}","gia_ban":"{{ xem.gia_ban|num }}","nguong_toi_thieu":"{{ xem.nguong_toi_thieu|num }}","han_su_dung":"{{ xem.han_su_dung|iso }}","so_ngay_canh_bao":"{{ xem.so_ngay_canh_bao }}","anh_sp":"{{ xem.anh_sp|default:''|escapejs }}","gia_von":"{{ xem.gia_von|num }}","ton_kho":"{{ xem.ton_kho|num }}","trang_thai":{{ xem.trang_thai }}}</script>
+  <div @edit-sp.window="edit(JSON.parse(document.getElementById('sp-xem').textContent))"></div>
+  {% endif %}
+
+  {% if user.is_admin %}
+  <!-- Modal thêm / sửa sản phẩm -->
+  <div x-show="open" x-transition.opacity x-cloak class="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4" @keydown.escape.window="open=false">
+    <form method="post" action="{% url 'san_pham_save' %}" enctype="multipart/form-data" class="mx-auto my-6 w-full max-w-2xl rounded-2xl bg-white shadow-2xl"
+          x-data="{ preview: '' }" @click.outside="open=false">
+      {% csrf_token %}
+      <input type="hidden" name="pk" :value="pk">
+      <div class="flex items-start gap-3 border-b px-6 py-5">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="package" class="h-5 w-5"></i></span>
+        <div class="flex-1"><h3 class="text-[18px] font-semibold" x-text="pk ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm mới'"></h3><p class="text-[12px] text-gray-500">Tạo / cập nhật sản phẩm và thiết lập thông tin kinh doanh.</p></div>
+        <button type="button" @click="open=false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="grid gap-4 px-6 py-5 sm:grid-cols-6">
+        <template x-if="e.__all__"><p class="err-text sm:col-span-6" x-text="e.__all__"></p></template>
+        <div class="sm:col-span-2">
+          <label class="label">Mã SP <span class="text-red-500">*</span> <span class="err-text" x-text="e.ma_sp"></span></label>
+          <input name="ma_sp" x-model="f.ma_sp" class="input" :class="e.ma_sp && 'err'" placeholder="VD: SP-0129">
+          <p class="hint">Mã là duy nhất, không trùng với sản phẩm khác.</p>
+        </div>
+        <div class="sm:col-span-4">
+          <label class="label">Tên sản phẩm <span class="text-red-500">*</span> <span class="err-text" x-text="e.ten_sp"></span></label>
+          <input name="ten_sp" x-model="f.ten_sp" class="input" :class="e.ten_sp && 'err'" placeholder="Nhập tên sản phẩm">
+        </div>
+        <div class="sm:col-span-6">
+          <label class="label">Mô tả ngắn</label>
+          <input name="mo_ta" x-model="f.mo_ta" class="input" placeholder="VD: Hộp 1L · Tiệt trùng">
+        </div>
+        <div class="sm:col-span-3">
+          <label class="label">Danh mục <span class="text-red-500">*</span> <span class="err-text" x-text="e.id_danhmuc"></span></label>
+          <select name="id_danhmuc" x-model="f.id_danhmuc" class="input" :class="e.id_danhmuc && 'err'">
+            <option value="">Chọn danh mục</option>
+            {% for d in danh_muc %}<option value="{{ d.pk }}">{{ d.duong_dan }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="sm:col-span-3">
+          <label class="label">Đơn vị tính <span class="text-red-500">*</span> <span class="err-text" x-text="e.don_vi"></span></label>
+          <input name="don_vi" x-model="f.don_vi" list="dvt-list" class="input" :class="e.don_vi && 'err'" placeholder="Ram, Hộp, Cái...">
+          <datalist id="dvt-list">{% for u in don_vi_goi_y %}<option value="{{ u }}">{% endfor %}</datalist>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Giá bán <span class="text-red-500">*</span> <span class="err-text" x-text="e.gia_ban"></span></label>
+          <div class="relative"><input name="gia_ban" type="number" min="0" step="1" x-model="f.gia_ban" class="input pr-14" :class="e.gia_ban && 'err'" placeholder="Nhập giá bán"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">VND (đ)</span></div>
+          <p class="hint">Không nhỏ hơn 0.</p>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Ngưỡng tồn tối thiểu <span class="err-text" x-text="e.nguong_toi_thieu"></span></label>
+          <input name="nguong_toi_thieu" type="number" min="0" step="any" x-model="f.nguong_toi_thieu" class="input" :class="e.nguong_toi_thieu && 'err'">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Số ngày cảnh báo HSD <span class="err-text" x-text="e.so_ngay_canh_bao"></span></label>
+          <input name="so_ngay_canh_bao" type="number" min="0" step="1" x-model="f.so_ngay_canh_bao" class="input" :class="e.so_ngay_canh_bao && 'err'">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Hạn sử dụng <span class="font-normal text-gray-400">(tùy chọn)</span></label>
+          <input name="han_su_dung" type="date" x-model="f.han_su_dung" class="input">
+          <p class="hint">Tự cập nhật theo lô nhập sớm nhất.</p>
+        </div>
+        <div class="sm:col-span-4">
+          <label class="label">Hình ảnh <span class="font-normal text-gray-400">(Không bắt buộc)</span></label>
+          <label class="flex cursor-pointer items-center gap-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 hover:border-brand-400">
+            <template x-if="preview || f.anh_sp"><img :src="preview || f.anh_sp" class="h-14 w-14 rounded-lg border object-cover"></template>
+            <span class="text-[12px] text-gray-500"><span class="font-semibold text-brand-700">Chọn ảnh</span> hoặc kéo thả vào đây<br>PNG, JPG, WEBP · Tối đa 5 MB</span>
+            <input type="file" name="anh" accept="image/png,image/jpeg,image/webp" class="hidden" @change="preview = $event.target.files[0] ? URL.createObjectURL($event.target.files[0]) : ''">
+          </label>
+        </div>
+        <div class="sm:col-span-6 rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+          <div class="mb-2 flex justify-between text-[12px]"><span class="font-semibold text-gray-700">Hệ thống tự thiết lập</span><span class="text-gray-400">Chỉ đọc</span></div>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <div><p class="mb-1 text-[11.5px] text-gray-500">Trạng thái</p><div class="input flex items-center gap-2 !bg-gray-100"><i data-lucide="lock" class="h-3.5 w-3.5 text-gray-400"></i><span class="text-emerald-700" x-text="f.trang_thai == 1 ? '● Đang bán' : '● Ngừng bán'"></span></div></div>
+            <div><p class="mb-1 text-[11.5px] text-gray-500">Giá vốn trung bình</p><div class="input flex items-center gap-2 !bg-gray-100"><i data-lucide="lock" class="h-3.5 w-3.5 text-gray-400"></i><span x-text="vnd(f.gia_von)"></span></div></div>
+            <div><p class="mb-1 text-[11.5px] text-gray-500">Tồn kho</p><div class="input flex items-center gap-2 !bg-gray-100"><i data-lucide="lock" class="h-3.5 w-3.5 text-gray-400"></i><span x-text="vn(f.ton_kho)"></span></div></div>
+          </div>
+          <p class="mt-2 text-[11px] text-gray-500">Sản phẩm mới được tạo ở trạng thái Đang bán. Giá vốn và tồn kho chỉ thay đổi qua nghiệp vụ nhập, xuất, kiểm kê.</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-between rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+        <span class="text-[11px] text-gray-400">* Thông tin bắt buộc</span>
+        <div class="flex gap-2"><button type="button" class="btn btn-ghost" @click="open=false">Hủy</button><button class="btn btn-primary">Lưu sản phẩm</button></div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

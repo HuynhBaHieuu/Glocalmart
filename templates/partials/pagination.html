@@ -1,0 +1,26 @@
+{% load wms_tags %}
+<div class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3.5 text-[12px] text-gray-500">
+  <div class="flex items-center gap-3">
+    <span>Hiển thị {% if page.paginator.count %}{{ page.start_index }}–{{ page.end_index }}{% else %}0{% endif %} trên {{ page.paginator.count }} {{ unit|default:"bản ghi" }}</span>
+    <select class="rounded-md border-gray-200 py-1 pl-2 pr-7 text-[12px]" onchange="location.href=this.value">
+      <option value="{% qs per=7 page=None %}" {% if page.per_page == 7 %}selected{% endif %}>7 / trang</option>
+      <option value="{% qs per=10 page=None %}" {% if page.per_page == 10 %}selected{% endif %}>10 / trang</option>
+      <option value="{% qs per=20 page=None %}" {% if page.per_page == 20 %}selected{% endif %}>20 / trang</option>
+      <option value="{% qs per=50 page=None %}" {% if page.per_page == 50 %}selected{% endif %}>50 / trang</option>
+      {% if page.per_page != 7 and page.per_page != 10 and page.per_page != 20 and page.per_page != 50 %}<option selected>{{ page.per_page }} / trang</option>{% endif %}
+    </select>
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="flex items-center gap-1">
+    {% if page.has_previous %}<a href="{% qs page=page.previous_page_number %}" class="grid h-7 w-7 place-items-center rounded-md border border-gray-200 hover:bg-gray-50">‹</a>
+    {% else %}<span class="grid h-7 w-7 place-items-center rounded-md border border-gray-100 text-gray-300">‹</span>{% endif %}
+    {% for n in page.range %}
+      {% if n == page.paginator.ELLIPSIS %}<span class="px-1">…</span>
+      {% elif n == page.number %}<span class="grid h-7 min-w-[28px] place-items-center rounded-md bg-brand-800 px-1.5 font-semibold text-white">{{ n }}</span>
+      {% else %}<a href="{% qs page=n %}" class="grid h-7 min-w-[28px] place-items-center rounded-md px-1.5 hover:bg-gray-100">{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if page.has_next %}<a href="{% qs page=page.next_page_number %}" class="grid h-7 w-7 place-items-center rounded-md border border-gray-200 hover:bg-gray-50">›</a>
+    {% else %}<span class="grid h-7 w-7 place-items-center rounded-md border border-gray-100 text-gray-300">›</span>{% endif %}
+  </nav>
+  {% endif %}
+</div>

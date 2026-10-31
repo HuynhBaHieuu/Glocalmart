@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}{% if p %}Sửa {{ p.pk }}{% else %}Lập phiếu xuất kho{% endif %}{% endblock %}
+{% block content %}
+{{ products|json_script:"products-data" }}
+{{ old|json_script:"old-data" }}
+<div x-data="phieuXuat()" x-init="init()">
+  <nav class="mb-1 text-[11.5px] text-gray-400">Xuất kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">{% if p %}Sửa phiếu xuất{% else %}Lập phiếu xuất{% endif %}</span></nav>
+  <h1 class="mb-5 text-[22px] font-semibold text-gray-900">{% if p %}Sửa phiếu xuất {{ p.pk }}{% else %}Lập phiếu xuất kho{% endif %}</h1>
+
+  <form method="post" x-ref="form" class="grid gap-5 xl:grid-cols-[1fr_320px]" @submit="if (!valid) { $event.preventDefault(); }">
+    {% csrf_token %}
+    <div class="card space-y-5 p-5">
+      <div class="flex items-start justify-between">
+        <div><h3 class="text-[15px] font-semibold">Thông tin phiếu xuất</h3><p class="text-[12px] text-gray-500">Chọn lý do, sản phẩm và số lượng cần xuất kho.</p></div>
+        <span class="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Phiếu mới</span>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div><label class="label">Mã phiếu xuất</label><div class="relative"><input class="input" value="{{ ma_du_kien }}" readonly><span class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Tự động</span></div></div>
+        <div><label class="label">Ngày lập</label><input class="input" value="{{ today|d }}" readonly></div>
+        <div><label class="label">Người lập</label><input class="input" value="{{ user.ho_ten }}" readonly></div>
+      </div>
+
+      <div>
+        <label class="label">Lý do xuất <span class="text-red-500">*</span></label>
+        <div class="grid gap-3 sm:grid-cols-3">
+          {% for code, label in ly_do %}
+          <label class="flex cursor-pointer items-center gap-2.5 rounded-xl border px-4 py-3 transition" :class="ly_do === '{{ code }}' ? 'border-brand-700 bg-brand-50 ring-1 ring-brand-700' : 'hover:border-gray-300'">
+            <input type="radio" name="ly_do_xuat" value="{{ code }}" x-model="ly_do" class="text-brand-700 focus:ring-brand-600">
+            <span class="text-[12.5px] font-medium">{% if code == 'BAN_HANG' %}Bán cho khách hàng{% elif code == 'HUY_HANG' %}Hủy hàng hỏng / hết hạn{% else %}Điều chỉnh tồn{% endif %}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="hint">Sản phẩm đã quá hạn sử dụng chỉ được xuất với lý do “Hủy hàng”.</p>
+      </div>
+
+      <div>
+        <label class="label">Ghi chú</label>
+        <textarea name="ghi_chu" x-model="ghi_chu" rows="2" class="input" placeholder="VD: Xuất cho đơn hàng #DH-1023 / Hủy lô sữa hết hạn..."></textarea>
+      </div>
+
+      <div>
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div><h3 class="text-[14px] font-semibold">Danh sách sản phẩm xuất</h3><p class="text-[12px] text-gray-500">Tồn kho được kiểm tra theo thời gian thực — không cho phép xuất âm kho.</p></div>
+          <div class="relative w-full sm:w-80" @click.outside="search=''">
+            <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+            <input x-model="search" @keydown.enter.prevent="results[0] && add(results[0])" placeholder="+ Thêm sản phẩm: gõ mã hoặc tên..." class="input pl-9">
+            <div x-show="search" class="absolute right-0 z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-xl">
+              <template x-for="p in results" :key="p.id">
+                <button type="button" @click="add(p)" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-brand-50" :class="p.ton <= 0 && 'opacity-50'">
+                  <span><span class="block text-[12.5px] font-medium" x-text="p.ten"></span><span class="text-[11px]" :class="p.het_han ? 'text-red-500' : 'text-gray-400'" x-text="p.ma + (p.het_han ? ' · ĐÃ HẾT HẠN' : '')"></span></span>
+                  <span class="text-right text-[11px]" :class="p.ton <= 0 ? 'text-red-500' : 'text-gray-500'">Tồn <b x-text="vn(p.ton)"></b> <span x-text="p.dvt"></span></span>
+                </button>
+              </template>
+              <p x-show="!results.length" class="px-3 py-3 text-[12px] text-gray-400">Không tìm thấy sản phẩm.</p>
+            </div>
+          </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border">
+          <table class="tbl compact">
+            <thead><tr><th>Sản phẩm</th><th class="text-right">Tồn kho</th><th>Hạn sử dụng</th><th class="w-32 text-right">Số lượng xuất</th><th class="w-10">Xóa</th></tr></thead>
+            <tbody>
+              <template x-for="(it, i) in items" :key="it.id">
+                <tr :class="errorOf(it) && 'bg-red-50/50'">
+                  <td><input type="hidden" name="sp" :value="it.id"><p class="font-medium" x-text="it.p.ten"></p><p class="text-[11px] text-gray-400" x-text="'SKU: ' + it.p.ma"></p>
+                    <p class="text-[11px] font-medium text-red-600" x-show="errorOf(it)" x-text="errorOf(it)"></p></td>
+                  <td class="text-right" x-text="vn(it.p.ton) + ' ' + it.p.dvt"></td>
+                  <td><span x-text="it.p.hsd ? it.p.hsd.split('-').reverse().join('/') : '—'"></span>
+                    <span x-show="it.p.het_han" class="ml-1 rounded bg-red-50 px-1.5 text-[10.5px] font-medium text-red-600">Hết hạn</span></td>
+                  <td><input name="sl" type="number" min="0.001" step="any" required :max="it.p.ton" x-model="it.sl" class="input text-right" :class="errorOf(it) && 'err'"></td>
+                  <td><button type="button" @click="items.splice(i,1)" class="text-red-500 hover:text-red-700"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></button></td>
+                </tr>
+              </template>
+              <tr x-show="!items.length"><td colspan="5" class="py-8 text-center text-[12px] text-gray-400">Gõ vào ô “Thêm sản phẩm” để chọn sản phẩm cần xuất...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <div class="card p-5">
+        <h3 class="mb-3 text-[14px] font-semibold">Tóm tắt phiếu xuất</h3>
+        <dl class="space-y-2 text-[12.5px]">
+          <div class="flex justify-between"><dt class="text-gray-500">Lý do xuất</dt><dd class="font-semibold" x-text="lyDoText()"></dd></div>
+          <div class="flex justify-between"><dt class="text-gray-500">Số sản phẩm</dt><dd class="font-semibold" x-text="items.length + ' loại'"></dd></div>
+          <div class="flex justify-between"><dt class="text-gray-500">Tổng số lượng</dt><dd class="font-semibold" x-text="vn(items.reduce((s,i)=>s+(Number(i.sl)||0),0))"></dd></div>
+          <div class="flex justify-between"><dt class="text-gray-500">Giá trị (theo giá bán)</dt><dd class="font-semibold text-brand-800" x-text="vnd(items.reduce((s,i)=>s+(Number(i.sl)||0)*i.p.gia_ban,0))"></dd></div>
+          <div class="flex justify-between"><dt class="text-gray-500">Trạng thái</dt><dd><span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Chờ xác nhận</span></dd></div>
+        </dl>
+      </div>
+      <div class="card p-5">
+        <h3 class="mb-3 text-[14px] font-semibold">Hành động</h3>
+        <button class="btn btn-primary w-full" :disabled="!valid"><i data-lucide="save"></i>Lưu phiếu</button>
+        <a href="{% if p %}{% url 'xuat_detail' p.pk %}{% else %}{% url 'xuat' %}{% endif %}" class="btn btn-ghost mt-2 w-full">Hủy</a>
+        <p class="mt-2 text-[11px] text-gray-400" x-show="!valid" x-text="!ly_do ? 'Chọn lý do xuất.' : (!items.length ? 'Thêm ít nhất 1 sản phẩm.' : 'Sửa các dòng báo lỗi.')"></p>
+      </div>
+      <div class="card border-emerald-200 bg-emerald-50/60 p-5 text-[12px] text-emerald-900">
+        <p class="mb-2 font-semibold">Lưu ý khi lập phiếu xuất</p>
+        <ul class="list-disc space-y-1 pl-5">
+          <li>Phiếu mới có trạng thái “Chờ xác nhận”, chưa trừ tồn.</li>
+          <li>Số lượng xuất không được vượt quá tồn kho khả dụng.</li>
+          <li>Sản phẩm quá hạn chỉ được xuất với lý do Hủy hàng.</li>
+          <li>Tồn kho chỉ bị trừ khi phiếu được xác nhận.</li>
+        </ul>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function phieuXuat() {
+  const products = jsonData('products-data');
+  const byId = Object.fromEntries(products.map(p => [p.id, p]));
+  const labels = { BAN_HANG: 'Bán hàng', HUY_HANG: 'Hủy hàng', DIEU_CHINH: 'Điều chỉnh' };
+  return {
+    ly_do: '', ghi_chu: '', search: '', items: [],
+    init() {
+      const old = jsonData('old-data');
+      if (old) {
+        this.ly_do = old.ly_do; this.ghi_chu = old.ghi_chu;
+        old.items.forEach(it => byId[it.id] && this.items.push({ id: it.id, p: byId[it.id], sl: it.sl }));
+      }
+      const q = new URLSearchParams(location.search);
+      if (q.get('ly_do')) this.ly_do = q.get('ly_do');
+      if (q.get('sp') && byId[q.get('sp')]) this.add(byId[q.get('sp')], true);
+    },
+    get results() {
+      const q = this.search.trim().toLowerCase();
+      if (!q) return [];
+      return products.filter(p => !this.items.some(i => i.id === p.id) && (p.ten.toLowerCase().includes(q) || p.ma.toLowerCase().includes(q))).slice(0, 10);
+    },
+    add(p, all = false) {
+      if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: all ? p.ton : (p.ton > 0 ? 1 : 0) });
+      this.search = '';
+    },
+    errorOf(it) {
+      const sl = Number(it.sl);
+      if (!(sl > 0)) return 'Số lượng phải lớn hơn 0';
+      if (sl > it.p.ton) return `Vượt tồn kho khả dụng (${vn(it.p.ton)} ${it.p.dvt})`;
+      if (this.ly_do === 'BAN_HANG' && it.p.het_han) return 'Đã quá hạn — chỉ được xuất Hủy hàng';
+      if (this.ly_do === 'BAN_HANG' && !it.p.active) return 'Sản phẩm ngừng kinh doanh — không thể xuất bán';
+      return '';
+    },
+    lyDoText() { return labels[this.ly_do] || '—'; },
+    get valid() { return this.ly_do && this.items.length && this.items.every(i => !this.errorOf(i)); },
+  };
+}
+</script>
+{% endblock %}

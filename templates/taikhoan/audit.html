@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Nhật ký thao tác{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400"><a href="{% url 'tai_khoan' %}" class="hover:underline">Quản lý tài khoản</a> <span class="mx-1">›</span> <span class="font-medium text-brand-700">Nhật ký thao tác</span></nav>
+<div class="mb-5"><h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Nhật ký thao tác (Audit log)</h1><p class="mt-1 text-[13px] text-gray-500">Mọi thao tác ghi dữ liệu đều được lưu lại để truy vết.</p></div>
+<div class="card overflow-hidden">
+  <form class="px-5 py-4"><div class="relative w-full sm:w-80"><i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i><input name="q" value="{{ q }}" placeholder="Tìm theo mã, hành động, người dùng..." class="input pl-9"></div></form>
+  <div class="overflow-x-auto">
+  <table class="tbl compact">
+    <thead><tr><th>Thời gian</th><th>Người dùng</th><th>Hành động</th><th>Đối tượng</th><th>Mã</th><th>Chi tiết</th><th>IP</th></tr></thead>
+    <tbody>
+    {% for l in page %}
+    <tr><td class="whitespace-nowrap text-gray-500">{{ l.ngay_tao|dt }}</td><td>{{ l.nguoi_dung.ho_ten|default:"—" }}</td><td><span class="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-semibold text-brand-800">{{ l.hanh_dong }}</span></td><td class="text-gray-500">{{ l.doi_tuong }}</td><td class="font-medium">{{ l.ma_doi_tuong }}</td><td class="max-w-md truncate text-[12px] text-gray-500" title="{{ l.chi_tiet }}">{{ l.chi_tiet|default:"" }}</td><td class="text-[11px] text-gray-400">{{ l.ip }}</td></tr>
+    {% empty %}<tr><td colspan="7" class="py-8 text-center text-gray-400">Chưa có nhật ký.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% include "partials/pagination.html" with unit="bản ghi" %}
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Nhập kho{% endblock %}
+{% block content %}
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Nhập kho</h1>
+    <p class="mt-1 text-[13px] text-gray-500">Quản lý và theo dõi các phiếu nhập kho.</p>
+  </div>
+  <div class="flex gap-2">
+    <a href="{% url 'nhap_export' %}{% qs page=None %}" class="btn btn-ghost"><i data-lucide="download"></i>Xuất file</a>
+    <a href="{% url 'nhap_create' %}" class="btn btn-primary"><i data-lucide="plus"></i>Tạo phiếu nhập kho</a>
+  </div>
+</div>
+
+<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+  <div class="stat">
+    <p class="text-[12px] text-gray-500">Tổng phiếu nhập</p>
+    <p class="mt-1 text-[26px] font-semibold">{{ tong|money }}</p>
+    {% if tang_truong is not None %}<p class="text-[11px] {% if tang_truong >= 0 %}text-emerald-600{% else %}text-red-500{% endif %}">{% if tang_truong >= 0 %}+{% endif %}{{ tang_truong }}% so với tháng trước</p>
+    {% else %}<p class="text-[11px] text-gray-400">{{ thang_nay }} phiếu trong tháng này</p>{% endif %}
+  </div>
+  <a href="?tt=CHO_GIAO" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Phiếu chờ giao</p><p class="mt-1 text-[26px] font-semibold">{{ cho_giao }}</p><p class="text-[11px] text-amber-600">Cần giao ngay</p></a>
+  <a href="?tt=DANG_GIAO" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Đang giao</p><p class="mt-1 text-[26px] font-semibold">{{ dang_giao }}</p><p class="text-[11px] text-blue-600">Chờ kiểm tra &amp; đối soát</p></a>
+  <a href="?tt=DA_XAC_NHAN" class="stat hover:shadow-sm"><p class="text-[12px] text-gray-500">Đã nhập kho</p><p class="mt-1 text-[26px] font-semibold">{{ da_nhap }}</p><p class="text-[11px] text-emerald-600">Đã cộng tồn kho</p></a>
+</div>
+
+<div class="card mt-5 overflow-hidden">
+  <form class="flex flex-wrap items-center gap-3 px-5 py-4">
+    <h3 class="mr-auto text-[15px] font-semibold">Danh sách phiếu nhập kho</h3>
+    <select name="tt" class="input w-auto" onchange="this.form.submit()">
+      <option value="">Tất cả trạng thái</option>
+      <option value="CHO_GIAO" {% if tt == 'CHO_GIAO' %}selected{% endif %}>Chờ giao</option>
+      <option value="DANG_GIAO" {% if tt == 'DANG_GIAO' %}selected{% endif %}>Đang giao</option>
+      <option value="DA_XAC_NHAN" {% if tt == 'DA_XAC_NHAN' %}selected{% endif %}>Đã giao (đã nhập kho)</option>
+      <option value="DA_HUY" {% if tt == 'DA_HUY' %}selected{% endif %}>Đã hủy</option>
+    </select>
+    <div class="relative w-full sm:w-72">
+      <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+      <input name="q" value="{{ q }}" placeholder="Tìm kiếm theo mã phiếu, nhà cung cấp..." class="input pl-9">
+    </div>
+  </form>
+  <div class="overflow-x-auto">
+    <table class="tbl">
+      <thead><tr><th>Mã phiếu</th><th>Nhà cung cấp</th><th>Ngày nhập</th><th>Người tạo</th><th>Trạng thái</th><th class="text-right">Tổng tiền</th><th></th></tr></thead>
+      <tbody>
+      {% for p in page %}
+      <tr>
+        <td><a href="{% url 'nhap_detail' p.pk %}" class="font-semibold text-gray-900 hover:text-brand-700">{{ p.pk }}</a></td>
+        <td>{{ p.id_ncc.ten_ncc }}</td>
+        <td class="text-gray-500">{{ p.ngay_tao|d }}</td>
+        <td class="text-gray-500">{{ p.nguoi_tao.ho_ten }}</td>
+        <td>{% if p.trang_thai == 'DA_HUY' %}{% badge 'DA_HUY' %}{% elif p.trang_thai == 'DA_XAC_NHAN' %}{% badge 'DA_GIAO' %}{% else %}{% badge p.trang_thai_giao %}{% endif %}</td>
+        <td class="text-right font-semibold">{{ p.tong_tien|vnd }}</td>
+        <td class="text-right">
+          {% if p.trang_thai == 'CHUA_XAC_NHAN' and p.trang_thai_giao == 'DANG_GIAO' %}
+            <a href="{% url 'nhap_doi_soat' p.pk %}" class="text-[12px] font-medium text-brand-700 hover:underline">Đối soát →</a>
+          {% else %}
+            <a href="{% url 'nhap_detail' p.pk %}" class="text-[12px] font-medium text-gray-500 hover:text-brand-700">Chi tiết →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Chưa có phiếu nhập nào.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "partials/pagination.html" with unit="phiếu" %}
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Đổi mật khẩu{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md">
+  <h1 class="mb-5 text-[24px] font-semibold text-gray-900">Đổi mật khẩu</h1>
+  <form method="post" class="card space-y-4 p-6">{% csrf_token %}
+    {% if err %}<p class="rounded-lg bg-red-50 px-3 py-2 text-[12.5px] text-red-600">{{ err }}</p>{% endif %}
+    <div><label class="label">Mật khẩu hiện tại</label><input type="password" name="cu" required class="input" autocomplete="current-password"></div>
+    <div><label class="label">Mật khẩu mới</label><input type="password" name="moi" required minlength="6" class="input" autocomplete="new-password"></div>
+    <div><label class="label">Xác nhận mật khẩu mới</label><input type="password" name="xac_nhan" required minlength="6" class="input" autocomplete="new-password"></div>
+    <div class="flex justify-end gap-2"><a href="/" class="btn btn-ghost">Hủy</a><button class="btn btn-primary">Cập nhật mật khẩu</button></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+.venv
+.idea
+.playwright-mcp
+db.sqlite3
+media
+docx
+main.py
+**/__pycache__
+.env

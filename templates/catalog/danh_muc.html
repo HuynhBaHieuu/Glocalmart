@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Danh mục sản phẩm{% endblock %}
+{% block content %}
+{{ modal|json_script:"modal-data" }}
+<div x-data="crud({ ma_danhmuc: '{{ goi_y_ma }}', ten_danhmuc: '', id_dmcha: '', mo_ta: '', is_active: true })">
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Danh mục sản phẩm</h1>
+      <p class="mt-1 text-[13px] text-gray-500">Quản lý và tổ chức danh mục sản phẩm (cây cha – con) trong hệ thống kho hàng.</p>
+    </div>
+    {% if user.is_admin %}<button class="btn btn-primary" @click="create()"><i data-lucide="plus"></i>Thêm danh mục mới</button>{% endif %}
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-3">
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Tổng số danh mục</p><p class="mt-1 flex items-baseline gap-2"><span class="text-[28px] font-semibold">{{ tong|stringformat:"02d" }}</span><span class="text-[11.5px] text-gray-500">Danh mục trong hệ thống</span></p></div><span class="stat-icon"><i data-lucide="layers" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Danh mục đang hoạt động</p><p class="mt-1 flex items-baseline gap-2"><span class="text-[28px] font-semibold">{{ dang_hd|stringformat:"02d" }}</span><span class="text-[11.5px] text-gray-500">{% widthratio dang_hd tong 100 %}% tổng số danh mục</span></p></div><span class="stat-icon"><i data-lucide="circle-check" class="h-4 w-4"></i></span></div>
+    <div class="stat flex items-start justify-between"><div><p class="text-[12px] text-gray-500">Danh mục trống</p><p class="mt-1 flex items-baseline gap-2"><span class="text-[28px] font-semibold">{{ trong|stringformat:"02d" }}</span><span class="text-[11.5px] text-gray-500">Chưa có sản phẩm</span></p></div><span class="stat-icon"><i data-lucide="box" class="h-4 w-4"></i></span></div>
+  </div>
+
+  <div class="card mt-5 overflow-hidden">
+    <form class="flex flex-wrap items-center gap-3 px-5 py-4">
+      <div class="relative min-w-[240px] flex-1 md:max-w-sm">
+        <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
+        <input name="q" value="{{ q }}" placeholder="Tìm theo mã hoặc tên danh mục..." class="input pl-9">
+      </div>
+      <select name="tt" class="input w-auto" onchange="this.form.submit()">
+        <option value="">Tất cả trạng thái</option>
+        <option value="1" {% if tt == "1" %}selected{% endif %}>Đang hoạt động</option>
+        <option value="0" {% if tt == "0" %}selected{% endif %}>Ngừng hoạt động</option>
+      </select>
+      <button class="btn btn-ghost"><i data-lucide="sliders-horizontal"></i>Bộ lọc</button>
+      <span class="ml-auto text-[12px] text-gray-500">{{ page.paginator.count }} danh mục</span>
+    </form>
+    <div class="overflow-x-auto">
+      <table class="tbl">
+        <thead><tr><th>Mã danh mục</th><th>Tên danh mục</th><th>Danh mục cha</th><th>Mô tả</th><th class="text-center">Số lượng sản phẩm<br>thuộc danh mục</th><th>Trạng thái</th>{% if user.is_admin %}<th class="text-right">Thao tác</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for d in page %}
+        <tr>
+          <td class="text-gray-500">{{ d.ma_danhmuc }}</td>
+          <td class="font-semibold text-gray-900">{% if d.id_dmcha %}<span class="mr-1 text-gray-300">└</span>{% endif %}{{ d.ten_danhmuc }}</td>
+          <td class="text-gray-500">{{ d.id_dmcha.ten_danhmuc|default:"—" }}</td>
+          <td class="max-w-xs truncate text-gray-500">{{ d.mo_ta|default:"—" }}</td>
+          <td class="text-center font-medium"><a href="/san-pham/?dm={{ d.pk }}" class="hover:text-brand-700">{{ d.so_sp }}</a></td>
+          <td>{% dot_badge d.is_active %}</td>
+          {% if user.is_admin %}
+          <td class="text-right">
+            <div class="flex items-center justify-end gap-3">
+              <button class="inline-flex items-center gap-1 text-[12px] font-medium text-gray-700 hover:text-brand-700"
+                      @click="edit({pk:'{{ d.pk }}', ma_danhmuc:'{{ d.ma_danhmuc|escapejs }}', ten_danhmuc:'{{ d.ten_danhmuc|escapejs }}', id_dmcha:'{{ d.id_dmcha_id|default_if_none:'' }}', mo_ta:'{{ d.mo_ta|escapejs }}', is_active:{{ d.is_active|yesno:'true,false' }} })">
+                <i data-lucide="square-pen" class="h-3.5 w-3.5"></i>Sửa</button>
+              {% if d.so_sp == 0 and d.so_con == 0 %}
+              <form method="post" action="{% url 'danh_muc_delete' d.pk %}" onsubmit="return confirm('Xóa danh mục “{{ d.ten_danhmuc|escapejs }}”?')">{% csrf_token %}
+                <button class="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[12px] font-medium text-red-600 hover:bg-red-100"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Xóa</button>
+              </form>
+              {% else %}
+              <span class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-300" title="Không thể xóa: còn sản phẩm hoặc danh mục con"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Xóa</span>
+              {% endif %}
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Không có danh mục phù hợp.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="flex items-center gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Không cho phép xóa danh mục nếu vẫn còn sản phẩm hoặc danh mục con thuộc danh mục đó.</div>
+    {% include "partials/pagination.html" with unit="danh mục" %}
+  </div>
+
+  {% if user.is_admin %}
+  <!-- Modal thêm / sửa -->
+  <div x-show="open" x-transition.opacity x-cloak class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 p-4" @keydown.escape.window="open=false">
+    <form method="post" action="{% url 'danh_muc_save' %}" class="w-full max-w-xl rounded-2xl bg-white shadow-2xl" @click.outside="open=false">
+      {% csrf_token %}
+      <input type="hidden" name="pk" :value="pk">
+      <div class="flex items-start gap-3 border-b px-6 py-5">
+        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700"><i data-lucide="tag" class="h-5 w-5"></i></span>
+        <div class="flex-1"><h3 class="text-[18px] font-semibold" x-text="pk ? 'Chỉnh sửa danh mục' : 'Thêm danh mục mới'"></h3><p class="text-[12px] text-gray-500">Tên danh mục không được trùng trong cùng danh mục cha.</p></div>
+        <button type="button" @click="open=false" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="grid gap-4 px-6 py-5 sm:grid-cols-2">
+        <template x-if="e.__all__"><p class="err-text sm:col-span-2" x-text="e.__all__"></p></template>
+        <div>
+          <label class="label">Mã danh mục <span class="text-red-500">*</span> <span class="err-text" x-text="e.ma_danhmuc"></span></label>
+          <input name="ma_danhmuc" x-model="f.ma_danhmuc" class="input" :class="e.ma_danhmuc && 'err'" placeholder="VD: DM009">
+        </div>
+        <div>
+          <label class="label">Tên danh mục <span class="text-red-500">*</span> <span class="err-text" x-text="e.ten_danhmuc"></span></label>
+          <input name="ten_danhmuc" x-model="f.ten_danhmuc" class="input" :class="e.ten_danhmuc && 'err'" placeholder="Nhập tên danh mục">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Danh mục cha <span class="font-normal text-gray-400">(không bắt buộc)</span> <span class="err-text" x-text="e.id_dmcha"></span></label>
+          <select name="id_dmcha" x-model="f.id_dmcha" class="input" :class="e.id_dmcha && 'err'">
+            <option value="">— Danh mục gốc —</option>
+            {% for c in tat_ca_dm %}<option value="{{ c.pk }}" :disabled="pk == '{{ c.pk }}'">{{ c.duong_dan }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="sm:col-span-2">
+          <label class="label">Mô tả</label>
+          <textarea name="mo_ta" x-model="f.mo_ta" rows="2" class="input" placeholder="Mô tả ngắn về nhóm hàng"></textarea>
+        </div>
+        <label class="flex items-center gap-2 sm:col-span-2" x-show="pk">
+          <input type="checkbox" name="is_active" x-model="f.is_active" class="rounded border-gray-300 text-brand-700 focus:ring-brand-500"> Đang hoạt động
+        </label>
+      </div>
+      <div class="flex items-center justify-between rounded-b-2xl border-t bg-gray-50 px-6 py-4">
+        <span class="text-[11px] text-gray-400">* Thông tin bắt buộc</span>
+        <div class="flex gap-2"><button type="button" class="btn btn-ghost" @click="open=false">Hủy</button><button class="btn btn-primary">Lưu danh mục</button></div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

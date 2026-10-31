@@ -1,0 +1,20 @@
+{# Modal nhập lý do (hủy / từ chối). Tham số: id, action, title, desc, label, btn #}
+<div x-data="{ open:false }" @open-{{ id }}.window="open=true" x-cloak>
+  <div x-show="open" x-transition.opacity class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" @keydown.escape.window="open=false">
+    <form method="post" action="{{ action }}" @click.outside="open=false" class="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+      {% csrf_token %}
+      <div class="flex items-start gap-3 border-b px-6 py-5">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-600"><i data-lucide="triangle-alert" class="h-5 w-5"></i></span>
+        <div><h3 class="text-[17px] font-semibold">{{ title }}</h3><p class="mt-0.5 text-[12.5px] text-gray-500">{{ desc }}</p></div>
+      </div>
+      <div class="px-6 py-5">
+        <label class="label">{{ label|default:"Lý do" }} <span class="text-red-500">*</span></label>
+        <textarea name="ly_do" required rows="3" class="input" placeholder="Nhập lý do..."></textarea>
+      </div>
+      <div class="flex justify-end gap-2 rounded-b-2xl bg-gray-50 px-6 py-4">
+        <button type="button" class="btn btn-ghost" @click="open=false">Đóng</button>
+        <button class="btn btn-danger-solid">{{ btn|default:"Xác nhận" }}</button>
+      </div>
+    </form>
+  </div>
+</div>
