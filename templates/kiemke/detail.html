@@ -38,12 +38,12 @@
       {% if mode == 'dem_lan_2' %}{% for ct in dong_lech %}{% if ct.sl_dem_lan_2 is None %}
         <tr><td class="font-semibold text-brand-800">{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}</td><td>{{ ct.don_vi }}</td>
           <td class="text-center"><span class="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600"><i data-lucide="flag" class="h-3 w-3"></i>Lệch số – đếm lại</span></td>
-          <td><input name="sl_{{ ct.pk }}" type="number" min="0" step="any" required class="input text-center font-semibold" placeholder="Nhập SL"></td>
+          <td><input name="sl_{{ ct.pk }}" type="number" min="0" step="1" inputmode="numeric" required class="input text-center font-semibold" onkeydown="return !'.,eE+-'.includes(event.key)" placeholder="Nhập SL"></td>
           <td><input name="note_{{ ct.pk }}" value="{{ ct.ghi_chu }}" class="input" placeholder="Ghi chú"></td></tr>
       {% endif %}{% endfor %}
       {% else %}{% for ct in chi_tiet %}
         <tr><td class="font-semibold text-brand-800">{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}</td><td>{{ ct.don_vi }}</td>
-          <td><input name="sl_{{ ct.pk }}" type="number" min="0" step="any" required class="input text-center font-semibold" placeholder="Nhập SL"></td>
+          <td><input name="sl_{{ ct.pk }}" type="number" min="0" step="1" inputmode="numeric" required class="input text-center font-semibold" onkeydown="return !'.,eE+-'.includes(event.key)" placeholder="Nhập SL"></td>
           <td><input name="note_{{ ct.pk }}" value="{{ ct.ghi_chu }}" class="input" placeholder="Ghi chú"></td></tr>
       {% endfor %}{% endif %}
       </tbody>
@@ -67,21 +67,22 @@
   </div>
   <div class="overflow-x-auto">
     <table class="tbl compact">
-      <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Đơn vị</th>{% if not an_he_thong %}<th class="text-right">Tồn hệ thống</th>{% endif %}<th class="text-right">Đếm lần 1</th><th class="text-right">Đếm lần 2</th><th class="text-right">SL thực tế</th>{% if not an_he_thong %}<th class="text-right">Chênh lệch</th><th class="text-right">Giá trị lệch</th>{% endif %}<th>Ghi chú NV</th></tr></thead>
+      <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Đơn vị</th><th class="text-right">Đếm lần 1</th><th class="text-right">Đếm lần 2</th>{% if not an_he_thong %}<th class="text-right">Tồn hệ thống</th>{% endif %}<th class="text-right">SL thực tế</th>{% if not an_he_thong %}<th class="text-right">Chênh lệch</th><th class="text-right">Giá trị lệch</th>{% endif %}{% if dong_thua %}<th>HSD lô thừa</th>{% endif %}<th>Ghi chú NV</th></tr></thead>
       <tbody>
       {% for ct in chi_tiet %}
       <tr class="{% if ct.co_chenh_lech %}bg-orange-50/40{% endif %}">
         <td class="font-semibold text-brand-800">{{ ct.id_sp.ma_sp }}</td>
         <td>{{ ct.id_sp.ten_sp }}{% if ct.co_chenh_lech %} <i data-lucide="flag" class="inline h-3 w-3 text-orange-500"></i>{% endif %}</td>
         <td>{{ ct.don_vi }}</td>
-        {% if not an_he_thong %}<td class="text-right">{{ ct.sl_he_thong|qty }}</td>{% endif %}
         <td class="text-right">{{ ct.sl_dem_lan_1|qty }}</td>
         <td class="text-right">{{ ct.sl_dem_lan_2|qty }}</td>
+        {% if not an_he_thong %}<td class="text-right">{{ ct.sl_he_thong|qty }}</td>{% endif %}
         <td class="text-right font-semibold">{{ ct.sl_dem_thuc_te|qty }}</td>
         {% if not an_he_thong %}
         <td class="text-right font-semibold {% if ct.sl_chenh_lech < 0 %}text-red-600{% elif ct.sl_chenh_lech > 0 %}text-blue-600{% else %}text-emerald-700{% endif %}">{{ ct.sl_chenh_lech|signed }}</td>
         <td class="text-right {% if ct.gia_tri_chenh_lech < 0 %}text-red-600{% endif %}">{{ ct.gia_tri_chenh_lech|vnd }}</td>
         {% endif %}
+        {% if dong_thua %}<td class="whitespace-nowrap text-[12px]">{% if ct.sl_thua > 0 %}{% if ct.hsd_thua_da_khai_bao %}{% if ct.han_su_dung_thua %}{{ ct.han_su_dung_thua|d }}{% else %}Không có HSD{% endif %}{% else %}<span class="text-amber-600">Chưa nhập</span>{% endif %}{% else %}<span class="text-gray-300">—</span>{% endif %}</td>{% endif %}
         <td class="text-[12px] text-gray-500">{{ ct.ghi_chu|default:"—" }}</td>
       </tr>
       {% endfor %}
@@ -99,6 +100,28 @@
   <div class="stat"><p class="text-[12px] text-gray-500">Giá trị thất thoát (thiếu)</p><p class="mt-1 text-[22px] font-semibold text-red-600">{{ tong_thieu|vnd }}</p></div>
   <div class="stat"><p class="text-[12px] text-gray-500">Giá trị thừa</p><p class="mt-1 text-[22px] font-semibold text-blue-600">{{ tong_thua|vnd }}</p></div>
   <div class="stat"><p class="text-[12px] text-gray-500">Chênh lệch ròng (theo giá vốn)</p><p class="mt-1 text-[22px] font-semibold {% if p.gia_tri_chenh_lech < 0 %}text-red-600{% else %}text-emerald-700{% endif %}">{{ p.gia_tri_chenh_lech|vnd }}</p></div>
+</div>
+{% endif %}
+
+{% if p.trang_thai == 'DANG_KIEM' and dong_thua %}
+<div class="card mb-5 border-blue-200 p-5">
+  <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="calendar-plus" class="h-4 w-4"></i>Hạn sử dụng của phần hàng thừa</h3>
+  <p class="mt-1 text-[12px] text-gray-500">Các sản phẩm dưới đây đếm được nhiều hơn hệ thống. Phần thừa sẽ thành một lô mới khi Quản lý duyệt — nhập hạn in trên bao bì của số hàng thừa trước khi gửi duyệt.</p>
+  <div class="mt-3 overflow-x-auto">
+    <table class="tbl compact">
+      <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th class="text-right">SL thừa</th><th>Hạn sử dụng <span class="text-red-500">*</span></th><th>Không có HSD</th></tr></thead>
+      <tbody>
+      {% for ct in dong_thua %}
+      <tr x-data="{ khong: {{ ct.hsd_thua_da_khai_bao|yesno:'true,false' }} && {{ ct.han_su_dung_thua|yesno:'false,true' }} }">
+        <td class="font-semibold text-brand-800">{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}</td>
+        <td class="text-right font-semibold text-blue-600">+{{ ct.sl_thua|qty }} {{ ct.don_vi }}</td>
+        <td><input type="date" form="form-gui-duyet" name="hsd_thua_{{ ct.pk }}" value="{{ ct.han_su_dung_thua|iso }}" class="input !w-40" :disabled="khong" :required="!khong"></td>
+        <td><label class="flex items-center gap-2 text-[12px]"><input type="checkbox" form="form-gui-duyet" name="khong_hsd_{{ ct.pk }}" x-model="khong" class="rounded border-gray-300 text-brand-700"> Không có HSD</label></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
 
@@ -122,7 +145,7 @@
     {% if p.nguoi_tao_id == user.pk or user.is_admin %}
     <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-danger">Hủy phiếu</button></form>
     {% endif %}
-    <form method="post" action="{% url 'kiem_gui_duyet' p.pk %}">{% csrf_token %}<button class="btn btn-primary"><i data-lucide="send"></i>Gửi duyệt</button></form>
+    <form method="post" action="{% url 'kiem_gui_duyet' p.pk %}" id="form-gui-duyet">{% csrf_token %}<button class="btn btn-primary"><i data-lucide="send"></i>Gửi duyệt</button></form>
   {% elif p.trang_thai == 'BI_TU_CHOI' %}
     {% if user.is_admin %}<form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>{% endif %}
     <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-ghost">Hủy phiếu</button></form>

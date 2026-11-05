@@ -12,9 +12,9 @@
   {% if p.ghi_chu %}<div style="grid-column:span 2">Ghi chú: {{ p.ghi_chu }}</div>{% endif %}
 </div>
 <table>
-  <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>ĐVT</th><th class="r">SL đặt</th><th class="r">SL thực nhận</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead>
-  <tbody>{% for ct in chi_tiet %}<tr><td>{{ forloop.counter }}</td><td>{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}{% if ct.ly_do_chenh_lech %}<br><span class="muted">Chênh lệch: {{ ct.get_ly_do_chenh_lech_display }}</span>{% endif %}</td><td>{{ ct.id_sp.don_vi }}</td><td class="r">{{ ct.so_luong_dat|qty }}</td><td class="r">{{ ct.so_luong_thuc_nhan|qty }}</td><td class="r">{{ ct.don_gia_nhap|money }}</td><td class="r">{{ ct.thanh_tien_thuc|money }}</td></tr>{% endfor %}</tbody>
-  <tfoot><tr><td colspan="7" class="r">TỔNG CỘNG</td><td class="r">{{ p.tong_tien_thuc|vnd }}</td></tr></tfoot>
+  <thead><tr><th>STT</th><th>Mã SP</th><th>Tên sản phẩm</th><th>ĐVT</th><th class="r">SL đặt</th><th class="r">SL thực nhận</th><th>Hạn sử dụng</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead>
+  <tbody>{% for ct in chi_tiet %}<tr><td>{{ forloop.counter }}</td><td>{{ ct.id_sp.ma_sp }}</td><td>{{ ct.id_sp.ten_sp }}{% if ct.ly_do_chenh_lech %}<br><span class="muted">Chênh lệch: {{ ct.get_ly_do_chenh_lech_display }}</span>{% endif %}</td><td>{{ ct.id_sp.don_vi }}</td><td class="r">{{ ct.so_luong_dat|qty }}</td><td class="r">{{ ct.so_luong_thuc_nhan|qty }}</td><td>{{ ct.han_su_dung|d }}</td><td class="r">{{ ct.don_gia_nhap|money }}</td><td class="r">{{ ct.thanh_tien_thuc|money }}</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td colspan="8" class="r">TỔNG CỘNG</td><td class="r">{{ p.tong_tien_thuc|vnd }}</td></tr></tfoot>
 </table>
 {% if p.ghi_chu_doi_soat %}<p>Ghi chú đối soát: {{ p.ghi_chu_doi_soat }}</p>{% endif %}
 <div class="sign"><div><p><b>Người lập phiếu</b></p><p class="muted">(Ký, họ tên)</p><p class="sp"></p><p>{{ p.nguoi_tao.ho_ten }}</p></div><div><p><b>Người giao hàng</b></p><p class="muted">(Ký, họ tên)</p></div><div><p><b>Thủ kho</b></p><p class="muted">(Ký, họ tên)</p><p class="sp"></p><p>{{ p.nguoi_xac_nhan.ho_ten|default:"" }}</p></div></div>

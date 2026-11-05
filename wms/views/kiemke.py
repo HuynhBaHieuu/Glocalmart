@@ -10,12 +10,20 @@ from ..decorators import admin_required
 from ..models import AuditLog, ChiTietPhieuKiemKe, DanhMuc, PhieuKiemKe, SanPham
 from ..services import NghiepVuError, audit, dem_lai, duyet_kiem_ke, ghi_dem, gui_duyet, next_doc_code, \
     tu_choi_kiem_ke
-from .common import paginate, products_json, to_decimal
+from .common import paginate, products_json, to_date, to_decimal
+
+
+# Danh sách chỉ hiện phiếu đã bấm "Gửi duyệt" trở đi; phiếu đang kiểm (chưa gửi) bị ẩn.
+TRANG_THAI_DANH_SACH = [(k, v) for k, v in PhieuKiemKe.TRANG_THAI if k != PhieuKiemKe.DANG_KIEM]
 
 
 def kiem_list(request):
-    qs = PhieuKiemKe.objects.select_related("nguoi_tao", "nguoi_duyet").prefetch_related("chi_tiet")
+    hien_thi = [k for k, _ in TRANG_THAI_DANH_SACH]
+    qs = (PhieuKiemKe.objects.filter(trang_thai__in=hien_thi)
+          .select_related("nguoi_tao", "nguoi_duyet").prefetch_related("chi_tiet"))
     q, tt = request.GET.get("q", "").strip(), request.GET.get("tt", "")
+    if tt not in hien_thi:
+        tt = ""
     if q:
         qs = qs.filter(Q(ma_phieu_kiem__icontains=q) | Q(nguoi_tao__ho_ten__icontains=q))
     if tt:
@@ -25,8 +33,11 @@ def kiem_list(request):
         "page": paginate(request, qs, 10),
         "q": q,
         "tt": tt,
-        "trang_thai": PhieuKiemKe.TRANG_THAI,
-        "dem": {k: PhieuKiemKe.objects.filter(trang_thai=k).count() for k, _ in PhieuKiemKe.TRANG_THAI},
+        "trang_thai": TRANG_THAI_DANH_SACH,
+        "dem": {k: PhieuKiemKe.objects.filter(trang_thai=k).count() for k in hien_thi},
+        # phiếu đang đếm dở của chính người dùng — để họ quay lại gửi duyệt (không nằm trong bảng)
+        "phieu_dang_kiem": PhieuKiemKe.objects.filter(trang_thai=PhieuKiemKe.DANG_KIEM, nguoi_tao=request.user)
+        .values_list("ma_phieu_kiem", flat=True),
     })
 
 
@@ -35,7 +46,8 @@ def kiem_create(request):
         "active": "kiem_ke",
         # đếm mù: KHÔNG gửi số tồn hệ thống xuống trình duyệt
         "products": products_json(include_stock=False),
-        "danh_muc": [{"id": d.pk, "ten": d.ten_danhmuc} for d in DanhMuc.objects.filter(is_active=True)],
+        "danh_muc": [{"id": d.pk, "ten": d.duong_dan} for d in DanhMuc.objects.filter(is_active=True)
+                     .select_related("id_dmcha__id_dmcha")],
         "max_sp": PhieuKiemKe.MAX_SAN_PHAM,
         "ma_du_kien": f"KK-{timezone.localtime().strftime('%y%m')}-####",
         "old": None,
@@ -55,6 +67,8 @@ def kiem_create(request):
             counts = [to_decimal(s) for s in sls]
             if any(c is None or c < 0 for c in counts):
                 raise NghiepVuError("Vui lòng nhập số lượng đếm thực tế (≥ 0) cho tất cả sản phẩm.")
+            if any(c != c.to_integral_value() for c in counts):
+                raise NghiepVuError("Số lượng đếm phải là số nguyên, không nhập số thập phân.")
             with transaction.atomic():
                 phieu = PhieuKiemKe.objects.create(ma_phieu_kiem=next_doc_code("KK"), nguoi_tao=request.user,
                                                    ghi_chu=request.POST.get("ghi_chu", "").strip() or None)
@@ -101,6 +115,7 @@ def kiem_detail(request, ma):
         "p": phieu,
         "chi_tiet": chi_tiet,
         "dong_lech": [ct for ct in chi_tiet if ct.co_chenh_lech],
+        "dong_thua": [ct for ct in chi_tiet if ct.sl_thua > 0],
         "mode": mode,
         "an_he_thong": an_he_thong,
         "tong_thieu": tong_thieu,
@@ -138,8 +153,15 @@ def kiem_dem(request, ma):
 @require_POST
 def kiem_gui_duyet(request, ma):
     phieu = get_object_or_404(PhieuKiemKe, pk=ma)
+    # hạn sử dụng nhân viên nhập tay cho phần hàng thừa (sẽ thành lô mới khi được duyệt)
+    hsd_thua = {}
+    for ct in phieu.chi_tiet.all():
+        if request.POST.get(f"khong_hsd_{ct.pk}"):
+            hsd_thua[ct.pk] = None
+        elif to_date(request.POST.get(f"hsd_thua_{ct.pk}")):
+            hsd_thua[ct.pk] = to_date(request.POST.get(f"hsd_thua_{ct.pk}"))
     try:
-        gui_duyet(phieu)
+        gui_duyet(phieu, hsd_thua)
         audit(request, "GUI_DUYET", "phieu_kiem_ke", ma)
         messages.success(request, f"Đã gửi phiếu {ma} cho Quản lý duyệt.")
     except NghiepVuError as e:

@@ -4,6 +4,9 @@
 .tbl { width: 100%; border-collapse: separate; border-spacing: 0; }
 .tbl thead th { background: #EDF3EF; color: #4B5563; font-weight: 600; font-size: 11.5px; text-align: left; padding: 11px 16px; white-space: nowrap; }
 .tbl tbody td { padding: 13px 16px; border-top: 1px solid #EEF0EF; vertical-align: middle; }
+/* Tiêu đề cột phải căn theo nội dung cột (số căn phải / giữa) — selector trên mạnh hơn class tiện ích */
+.tbl thead th.text-right { text-align: right; }
+.tbl thead th.text-center { text-align: center; }
 .tbl tbody tr:hover td { background: #FAFCFB; }
 .tbl.compact tbody td { padding: 9px 12px; }
 .tbl.compact thead th { padding: 9px 12px; }

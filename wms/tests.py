@@ -7,7 +7,8 @@ from django.utils import timezone
 
 from .api_auth import tao_api_key
 from .models import (
-    ChiTietPhieuKiemKe, ChiTietPhieuNhap, ChiTietPhieuXuat, DanhMuc, NguoiDung, NhaCungCap, NhatKyKho, PhieuKiemKe,
+    ChiTietPhieuKiemKe, ChiTietPhieuNhap, ChiTietPhieuXuat, DanhMuc, NguoiDung, NhaCungCap, NhatKyKho, PhanBoLoXuat,
+    PhieuKiemKe,
     PhieuNhap, PhieuXuat, SanPham,
 )
 from .services import (
@@ -26,12 +27,12 @@ class Base(TestCase):
         self.sp = SanPham.objects.create(ma_sp="SP1", ten_sp="Sữa tươi", id_danhmuc=self.dm, don_vi="Hộp",
                                          gia_ban=30000, nguong_toi_thieu=10)
 
-    def nhap(self, sl, gia, hsd=None, thuc=None, ly_do=None):
+    def nhap(self, sl, gia, hsd=None, thuc=None, ly_do=None, ly_do_can_han="Nhận theo chỉ đạo quản lý"):
         p = PhieuNhap.objects.create(ma_phieu_nhap=next_doc_code("PN"), id_ncc=self.ncc, nguoi_tao=self.nv)
         ct = ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=sl, don_gia_nhap=gia)
         chuyen_trang_thai_giao(p, PhieuNhap.DANG_GIAO, self.nv)
         xac_nhan_phieu_nhap(p.pk, {ct.pk: {"sl": D(thuc if thuc is not None else sl), "hsd": hsd, "ly_do": ly_do}},
-                            self.nv)
+                            self.nv, ly_do_can_han=ly_do_can_han)
         self.sp.refresh_from_db()
         return p
 
@@ -189,3 +190,411 @@ class WebTest(Base):
         self.client.force_login(self.admin)
         r = self.client.get("/bao-cao/xuat/?format=pdf")
         self.assertEqual(r["Content-Type"], "application/pdf")
+
+
+class SuaLoiTestglocalTest(Base):
+    """Các lỗi trong test/testglocal.pdf (mục 1-7, 10-20)."""
+
+    def login(self, user):
+        self.client.force_login(user)
+
+    def test_danh_sach_kiem_ke_an_phieu_dang_kiem(self):
+        dk = PhieuKiemKe.objects.create(ma_phieu_kiem="KK-DANG", nguoi_tao=self.nv)
+        cd = PhieuKiemKe.objects.create(ma_phieu_kiem="KK-CHO", nguoi_tao=self.nv, trang_thai=PhieuKiemKe.CHO_DUYET)
+        self.login(self.admin)
+        r = self.client.get("/kiem-ke/")
+        ma = [p.pk for p in r.context["page"]]
+        self.assertIn(cd.pk, ma)
+        self.assertNotIn(dk.pk, ma)
+        self.assertNotIn("DANG_KIEM", [k for k, _ in r.context["trang_thai"]])
+        r = self.client.get("/kiem-ke/?tt=DANG_KIEM")  # không lọc ngược ra được
+        self.assertNotIn(dk.pk, [p.pk for p in r.context["page"]])
+
+    def test_them_ca_danh_muc_cha_lay_san_pham_danh_muc_con(self):
+        from .views.common import products_json
+        cha = DanhMuc.objects.create(ma_danhmuc="DM0", ten_danhmuc="Đồ uống")
+        self.dm.id_dmcha = cha
+        self.dm.save()
+        item = next(p for p in products_json(include_stock=False) if p["id"] == self.sp.pk)
+        self.assertEqual(item["dm_ids"], [self.dm.pk, cha.pk])
+
+    def test_dem_kiem_ke_khong_nhan_so_thap_phan(self):
+        p = PhieuKiemKe.objects.create(ma_phieu_kiem="KK-T", nguoi_tao=self.nv)
+        ct = ChiTietPhieuKiemKe.objects.create(ma_phieu_kiem=p, id_sp=self.sp, don_vi="Hộp")
+        with self.assertRaises(NghiepVuError):
+            ghi_dem(p, 1, {ct.pk: D("13.2")}, {})
+        ghi_dem(p, 1, {ct.pk: D("13")}, {})
+
+    def test_xuat_kho_khong_nhan_so_thap_phan(self):
+        self.nhap(50, 20000)
+        with self.assertRaises(NghiepVuError):
+            xac_nhan_phieu_xuat(self.xuat(D("2.4")).pk, self.nv)
+        self.sp.refresh_from_db()
+        self.assertEqual(self.sp.ton_kho, 50)
+
+    def test_admin_xoa_danh_muc_ngung_hoat_dong_con_san_pham(self):
+        cha = DanhMuc.objects.create(ma_danhmuc="DM0", ten_danhmuc="Đồ uống")
+        con = DanhMuc.objects.create(ma_danhmuc="DM2", ten_danhmuc="Sữa chua", id_dmcha=self.dm)
+        self.dm.id_dmcha = cha
+        self.dm.save()
+        self.login(self.admin)
+        # đang hoạt động + còn sản phẩm → chưa được xóa
+        self.client.post(f"/danh-muc/{self.dm.pk}/xoa/")
+        self.assertTrue(DanhMuc.objects.filter(pk=self.dm.pk).exists())
+        # ngừng hoạt động → xóa được, SP + danh mục con chuyển lên danh mục cha
+        DanhMuc.objects.filter(pk=self.dm.pk).update(is_active=False)
+        self.client.post(f"/danh-muc/{self.dm.pk}/xoa/")
+        self.assertFalse(DanhMuc.objects.filter(pk=self.dm.pk).exists())
+        self.sp.refresh_from_db()
+        con.refresh_from_db()
+        self.assertEqual(self.sp.id_danhmuc_id, cha.pk)
+        self.assertEqual(con.id_dmcha_id, cha.pk)
+
+    def test_xoa_danh_muc_goc_ngung_hoat_dong_chuyen_sp_sang_chua_phan_loai(self):
+        DanhMuc.objects.filter(pk=self.dm.pk).update(is_active=False)
+        self.login(self.admin)
+        self.client.post(f"/danh-muc/{self.dm.pk}/xoa/")
+        self.sp.refresh_from_db()
+        self.assertEqual(self.sp.id_danhmuc.ten_danhmuc, "Chưa phân loại")
+
+    def test_nhan_vien_khong_xuat_duoc_bao_cao(self):
+        self.login(self.nv)
+        r = self.client.get("/bao-cao/")
+        self.assertNotContains(r, "Xuất báo cáo")
+        r = self.client.get("/bao-cao/xuat/?format=xlsx")
+        self.assertEqual(r.status_code, 302)
+        self.login(self.admin)
+        r = self.client.get("/bao-cao/xuat/?format=xlsx")
+        self.assertEqual(r.status_code, 200)
+
+    def test_dashboard_canh_bao_han_va_xuat_bao_cao(self):
+        self.nhap(50, 20000, hsd=timezone.localdate() - timedelta(days=3))
+        self.login(self.admin)
+        r = self.client.get("/?tab=het_han")
+        self.assertEqual(r.context["het_han"], 1)
+        self.assertContains(r, "Biểu đồ Cảnh báo Hạn sử dụng")
+        self.assertContains(r, "Tạo phiếu xuất")
+        self.assertNotContains(r, "Tồn kho Tối thiểu")
+        self.assertContains(r, "Xuất báo cáo")
+        r = self.client.get("/canh-bao/xuat-excel/?tab=het_han")
+        self.assertEqual(r["Content-Type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.login(self.nv)
+        self.assertNotContains(self.client.get("/"), "Xuất báo cáo")
+        self.assertEqual(self.client.get("/canh-bao/xuat-excel/").status_code, 302)
+
+    def test_trang_dang_nhap_va_form_khong_con_noi_dung_thua(self):
+        self.assertContains(self.client.get("/login/"), "MART &amp; CAFE")
+        self.login(self.admin)
+        self.assertNotContains(self.client.get("/tai-khoan/"), "Quyền hạn:")
+        self.assertNotContains(self.client.get("/nhap-kho/tao/"), "Tổng giá trị phiếu")
+
+
+class PhanBoLoTonKhoTest(Base):
+    """Migration dữ liệu: chia ton_kho vào các lô, phần dư → phiếu Tồn đầu kỳ."""
+
+    def phan_bo(self):
+        from . import lo
+        return lo.phan_bo_lo_ton_kho(SanPham, PhieuNhap, ChiTietPhieuNhap, NhaCungCap, NguoiDung)
+
+    def con_lai(self, phieu):
+        return phieu.chi_tiet.get().so_luong_con_lai
+
+    def test_uu_tien_lo_nhap_gan_nhat_lo_cu_ve_0(self):
+        p1, p2 = self.nhap(80, 20000), self.nhap(70, 21000)
+        self.xuat_xac_nhan(100)                         # tồn còn 50
+        self.phan_bo()
+        self.assertEqual(self.con_lai(p2), 50)          # lô mới giữ số
+        self.assertEqual(self.con_lai(p1), 0)           # lô cũ về 0
+        self.assertFalse(PhieuNhap.objects.filter(pk=PhieuNhap.MA_TON_DAU).exists())
+
+    def test_ton_kho_lon_hon_tong_lo_tao_phieu_ton_dau(self):
+        p1 = self.nhap(80, 20000)
+        SanPham.objects.filter(pk=self.sp.pk).update(ton_kho=200)   # VD: tồn gán trực tiếp / kiểm kê thừa
+        tk = self.phan_bo()
+        self.assertEqual(self.con_lai(p1), 80)
+        ton_dau = PhieuNhap.objects.get(pk=PhieuNhap.MA_TON_DAU)
+        ct = ton_dau.chi_tiet.get()
+        self.assertEqual((ct.id_sp_id, ct.so_luong_con_lai, ct.so_luong_thuc_nhan), (self.sp.pk, 120, 120))
+        self.assertEqual(ton_dau.trang_thai, PhieuNhap.DA_XAC_NHAN)
+        self.assertLess(ton_dau.ngay_tao, p1.ngay_tao)  # hàng tồn đầu kỳ là hàng cũ nhất
+        self.assertEqual(tk["ton_dau"], [("SP1", 120)])
+        self.assertEqual(NhatKyKho.objects.filter(ma_phieu_nhap=ton_dau).count(), 0)  # tồn thực tế không đổi
+
+        from .services import kiem_tra_tong_lo
+        self.assertEqual(kiem_tra_tong_lo(), [])
+        self.phan_bo()                                   # chạy lại không nhân đôi
+        self.assertEqual(ton_dau.chi_tiet.count(), 1)
+        self.assertEqual(kiem_tra_tong_lo(), [])
+
+    def test_kiem_tra_tong_lo_phat_hien_lech(self):
+        self.nhap(80, 20000)
+        self.phan_bo()
+        from .services import kiem_tra_tong_lo
+        SanPham.objects.filter(pk=self.sp.pk).update(ton_kho=90)
+        self.assertEqual(kiem_tra_tong_lo(), [("SP1", D(90), D(80))])
+
+    def test_khong_huy_duoc_phieu_ton_dau(self):
+        self.nhap(10, 20000)
+        SanPham.objects.filter(pk=self.sp.pk).update(ton_kho=30)
+        self.phan_bo()
+        self.client.force_login(self.admin)
+        self.client.post(f"/nhap-kho/{PhieuNhap.MA_TON_DAU}/huy/", {"ly_do": "thử"})
+        self.assertEqual(PhieuNhap.objects.get(pk=PhieuNhap.MA_TON_DAU).trang_thai, PhieuNhap.DA_XAC_NHAN)
+        self.sp.refresh_from_db()
+        self.assertEqual(self.sp.ton_kho, 30)
+
+    def xuat_xac_nhan(self, sl):
+        xac_nhan_phieu_xuat(self.xuat(sl).pk, self.nv)
+        self.sp.refresh_from_db()
+
+
+class LoFefoTest(Base):
+    """Chức năng 1: quản lý hạn sử dụng theo lô (FEFO)."""
+
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+
+    def ngay(self, n):
+        return self.today + timedelta(days=n)
+
+    def lo(self, phieu):
+        return phieu.chi_tiet.get()
+
+    def xuat_xn(self, sl, ly_do=PhieuXuat.BAN_HANG):
+        p = self.xuat(sl, ly_do)
+        xac_nhan_phieu_xuat(p.pk, self.nv)
+        self.sp.refresh_from_db()
+        return p
+
+    def assertKhopTon(self):
+        from .services import kiem_tra_tong_lo
+        self.assertEqual(kiem_tra_tong_lo(), [])
+
+    # ---- nhập hạn tay cho từng lô
+    def test_nhap_han_tay_tung_lo_de_trong_la_khong_han(self):
+        p = PhieuNhap.objects.create(ma_phieu_nhap="PN-T1", id_ncc=self.ncc, nguoi_tao=self.nv)
+        ct = ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=100, don_gia_nhap=20000)
+        chuyen_trang_thai_giao(p, PhieuNhap.DANG_GIAO, self.nv)
+        # cùng 1 sản phẩm giao về 2 hạn khác nhau + 1 phần không có hạn → 3 lô; tổng = SL đặt nên không cần lý do
+        xac_nhan_phieu_nhap(p.pk, {ct.pk: {"sl": D(60), "hsd": self.ngay(90), "ly_do": None}}, self.nv,
+                            dong_moi=[{"goc": ct.pk, "sl": D(30), "hsd": self.ngay(120)},
+                                      {"goc": ct.pk, "sl": D(10), "hsd": None}])
+        lots = list(p.chi_tiet.order_by("id_chi_tiet").values_list("so_luong_con_lai", "han_su_dung", "ly_do_chenh_lech"))
+        self.assertEqual(lots, [(60, self.ngay(90), None), (30, self.ngay(120), None), (10, None, None)])
+        self.sp.refresh_from_db()
+        self.assertEqual((self.sp.ton_kho, self.sp.han_su_dung), (100, self.ngay(90)))  # HSD SP = hạn sớm nhất
+        self.assertKhopTon()
+
+    def test_tach_lo_chenh_lech_tinh_theo_tong_san_pham(self):
+        p = PhieuNhap.objects.create(ma_phieu_nhap="PN-T3", id_ncc=self.ncc, nguoi_tao=self.nv)
+        ct = ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=100, don_gia_nhap=20000)
+        chuyen_trang_thai_giao(p, PhieuNhap.DANG_GIAO, self.nv)
+        dong = {ct.pk: {"sl": D(60), "hsd": self.ngay(90), "ly_do": None}}
+        moi = [{"goc": ct.pk, "sl": D(30), "hsd": self.ngay(120)}]
+        with self.assertRaisesMessage(NghiepVuError, "bắt buộc chọn lý do"):   # 60 + 30 ≠ 100
+            xac_nhan_phieu_nhap(p.pk, dong, self.nv, dong_moi=moi)
+        self.assertEqual(p.chi_tiet.count(), 1)                                 # rollback cả dòng tách
+        dong[ct.pk]["ly_do"] = "THIEU_HANG"
+        xac_nhan_phieu_nhap(p.pk, dong, self.nv, dong_moi=moi)
+        ct.refresh_from_db()
+        self.assertEqual(ct.ly_do_chenh_lech, "THIEU_HANG")
+
+    def test_nhap_han_da_qua_phai_xac_nhan_lai_kem_ly_do(self):
+        from .services import luu_nhap_doi_soat
+        p = PhieuNhap.objects.create(ma_phieu_nhap="PN-T2", id_ncc=self.ncc, nguoi_tao=self.nv)
+        ct = ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=10, don_gia_nhap=20000)
+        chuyen_trang_thai_giao(p, PhieuNhap.DANG_GIAO, self.nv)
+        dong = {ct.pk: {"sl": D(10), "hsd": self.ngay(-2), "ly_do": None}}
+        luu_nhap_doi_soat(p.pk, dong, None)                     # không chặn lưu nháp
+        with self.assertRaisesMessage(NghiepVuError, "Lô hàng cận hạn/đã hết hạn"):
+            xac_nhan_phieu_nhap(p.pk, dong, self.nv)
+        self.sp.refresh_from_db()
+        self.assertEqual(self.sp.ton_kho, 0)                    # rollback, chưa cộng tồn
+        xac_nhan_phieu_nhap(p.pk, dong, self.nv, ly_do_can_han="NCC đổi trả trong tuần")
+        ct.refresh_from_db()
+        self.assertIn("đã hết hạn", ct.ghi_chu_doi_soat)
+        self.assertIn("NCC đổi trả trong tuần", ct.ghi_chu_doi_soat)
+
+    def test_sua_han_lo_ghi_nhat_ky(self):
+        from .services import sua_han_lo
+        p = self.nhap(20, 20000, hsd=self.ngay(60))
+        lo = self.lo(p)
+        with self.assertRaises(NghiepVuError):                  # bắt buộc lý do
+            sua_han_lo(lo.pk, self.ngay(100), "", self.nv)
+        sua_han_lo(lo.pk, self.ngay(100), "Nhập nhầm hạn", self.nv)
+        lo.refresh_from_db()
+        self.sp.refresh_from_db()
+        self.assertEqual((lo.han_su_dung, lo.so_luong_con_lai, self.sp.ton_kho), (self.ngay(100), 20, 20))
+        self.assertEqual(self.sp.han_su_dung, self.ngay(100))
+        nk = NhatKyKho.objects.get(loai_giao_dich=NhatKyKho.SUA_HAN_LO)
+        self.assertEqual((nk.lo_id, nk.han_cu, nk.han_moi, nk.nguoi_thuc_hien, nk.ly_do, nk.sl_thay_doi),
+                         (lo.pk, self.ngay(60), self.ngay(100), self.nv, "Nhập nhầm hạn", 0))
+        # báo cáo N-X-T không tính nhật ký sửa hạn
+        from .views.baocao import tinh_nxt
+        r = tinh_nxt(self.today, self.today, SanPham.objects.filter(pk=self.sp.pk))[0]
+        self.assertEqual((r["nhap"], r["kiem"], r["cuoi"]), (20, 0, 20))
+
+    # ---- FEFO
+    def test_fefo_tru_qua_2_lo_khong_han_xep_cuoi(self):
+        c = self.nhap(20, 20000, hsd=None)                      # không hạn → xếp cuối dù nhập trước
+        b = self.nhap(50, 20000, hsd=self.ngay(40))
+        a = self.nhap(30, 20000, hsd=self.ngay(10))
+        px = self.xuat_xn(40)
+        self.assertEqual([self.lo(x).so_luong_con_lai for x in (a, b, c)], [0, 40, 20])
+        pb = list(px.chi_tiet.get().phan_bo.values_list("lo__ma_phieu_nhap", "so_luong"))
+        self.assertEqual(pb, [(a.pk, 30), (b.pk, 10)])
+        self.assertEqual(self.sp.han_su_dung, self.ngay(40))
+        self.assertKhopTon()
+
+    def test_cung_han_lo_nhap_truoc_tru_truoc(self):
+        p1 = self.nhap(10, 20000, hsd=self.ngay(30))
+        p2 = self.nhap(10, 20000, hsd=self.ngay(30))
+        PhieuNhap.objects.filter(pk=p2.pk).update(ngay_xac_nhan=timezone.now() + timedelta(hours=1))
+        self.xuat_xn(4)
+        self.assertEqual((self.lo(p1).so_luong_con_lai, self.lo(p2).so_luong_con_lai), (6, 10))
+
+    def test_xuat_vuot_ton_bi_rollback(self):
+        a = self.nhap(10, 20000, hsd=self.ngay(20))
+        p = self.xuat(15)
+        with self.assertRaises(NghiepVuError):
+            xac_nhan_phieu_xuat(p.pk, self.nv)
+        self.sp.refresh_from_db()
+        p.refresh_from_db()
+        self.assertEqual((self.sp.ton_kho, self.lo(a).so_luong_con_lai, p.trang_thai), (10, 10, PhieuXuat.CHUA_XAC_NHAN))
+        self.assertFalse(PhanBoLoXuat.objects.exists())
+
+    def test_tru_ton_fefo_khong_du_hang_trong_cac_lo(self):
+        from .services import tru_ton_fefo
+        self.nhap(10, 20000, hsd=self.ngay(20))
+        with self.assertRaisesMessage(NghiepVuError, "Không đủ hàng trong các lô"):
+            tru_ton_fefo(self.sp.pk, D(11))
+
+    def test_ban_hang_chi_lay_lo_con_han(self):
+        het = self.nhap(10, 20000, hsd=self.ngay(-1))
+        tot = self.nhap(20, 20000, hsd=self.ngay(60))
+        with self.assertRaisesMessage(NghiepVuError, "lô đã hết hạn chỉ được xuất với lý do Hủy hàng"):
+            xac_nhan_phieu_xuat(self.xuat(25).pk, self.nv)
+        self.xuat_xn(20)                                        # bán được phần còn hạn, lô hết hạn giữ nguyên
+        self.assertEqual((self.lo(het).so_luong_con_lai, self.lo(tot).so_luong_con_lai), (10, 0))
+        with self.assertRaises(NghiepVuError):
+            xac_nhan_phieu_xuat(self.xuat(1, PhieuXuat.DIEU_CHINH).pk, self.nv)
+        self.xuat_xn(10, PhieuXuat.HUY_HANG)                    # lô hết hạn chỉ hủy
+        self.assertEqual(self.sp.ton_kho, 0)
+
+    def test_lo_ve_0_thi_het_canh_bao(self):
+        from .services import canh_bao_han_su_dung
+        self.nhap(10, 20000, hsd=self.ngay(-3))
+        self.nhap(5, 20000, hsd=self.ngay(5))
+        self.assertEqual(sorted(l.muc_han for l in canh_bao_han_su_dung()), ["DA_HET_HAN", "SAP_HET_HAN"])
+        self.xuat_xn(10, PhieuXuat.HUY_HANG)
+        self.assertEqual([l.muc_han for l in canh_bao_han_su_dung()], ["SAP_HET_HAN"])
+        self.xuat_xn(5)
+        self.assertEqual(canh_bao_han_su_dung(), [])
+
+    def test_dashboard_tab_het_han_hien_theo_lo(self):
+        p = self.nhap(10, 20000, hsd=self.ngay(-3))
+        self.client.force_login(self.nv)
+        r = self.client.get("/?tab=het_han")
+        self.assertTrue(r.context["theo_lo"])
+        self.assertEqual([lo.pk for lo in r.context["page"]], [self.lo(p).pk])
+        self.assertContains(r, f"/xuat-kho/tao/?sp={self.sp.pk}&sl=10&ly_do=HUY_HANG")
+
+    # ---- hủy phiếu
+    def test_huy_phieu_xuat_tra_ve_dung_lo(self):
+        from .services import huy_phieu_xuat
+        a = self.nhap(30, 20000, hsd=self.ngay(10))
+        b = self.nhap(50, 20000, hsd=self.ngay(40))
+        px = self.xuat_xn(40)
+        self.xuat_xn(5)                                         # phiếu khác lấy tiếp từ lô B
+        huy_phieu_xuat(px.pk, self.admin, "Khách trả hàng")
+        self.sp.refresh_from_db()
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai, self.sp.ton_kho), (30, 45, 75))
+        self.assertKhopTon()
+
+    def test_khong_huy_phieu_nhap_khi_lo_da_xuat_bot(self):
+        from .services import huy_phieu_nhap
+        a = self.nhap(30, 20000, hsd=self.ngay(10))
+        self.xuat_xn(1)
+        with self.assertRaisesMessage(NghiepVuError, "đã được xuất"):
+            huy_phieu_nhap(a.pk, self.admin, "Nhập nhầm")
+        b = self.nhap(10, 20000, hsd=self.ngay(50))
+        huy_phieu_nhap(b.pk, self.admin, "Nhập nhầm")
+        self.sp.refresh_from_db()
+        self.assertEqual((self.sp.ton_kho, self.lo(b).so_luong_con_lai), (29, 0))
+        self.assertKhopTon()
+
+    # ---- kiểm kê
+    def kiem(self, dem):
+        p = PhieuKiemKe.objects.create(ma_phieu_kiem=next_doc_code("KK"), nguoi_tao=self.nv)
+        ct = ChiTietPhieuKiemKe.objects.create(ma_phieu_kiem=p, id_sp=self.sp, don_vi="Hộp")
+        ghi_dem(p, 1, {ct.pk: D(dem)}, {})
+        p.refresh_from_db()
+        if p.can_dem_lan_2:
+            ghi_dem(p, 2, {ct.pk: D(dem)}, {})
+            p.refresh_from_db()
+        ct.refresh_from_db()
+        return p, ct
+
+    def test_kiem_ke_thieu_tru_theo_fefo(self):
+        a = self.nhap(30, 20000, hsd=self.ngay(10))
+        b = self.nhap(50, 20000, hsd=self.ngay(40))
+        p, _ = self.kiem(45)                                    # thiếu 35
+        gui_duyet(p)
+        duyet_kiem_ke(p.pk, self.admin)
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (0, 45))
+        self.assertKhopTon()
+
+    def test_kiem_ke_thua_nhan_vien_nhap_tay_hsd_lo_thua(self):
+        from .services import huy_phieu_nhap
+        self.nhap(30, 20000, hsd=self.ngay(10))
+        p, ct = self.kiem(34)                                   # thừa 4
+        with self.assertRaisesMessage(NghiepVuError, "Nhập hạn sử dụng cho phần hàng thừa"):
+            gui_duyet(p)
+        gui_duyet(p, {ct.pk: self.ngay(200)})
+        duyet_kiem_ke(p.pk, self.admin)
+        lo_thua = ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}")
+        self.assertEqual((lo_thua.so_luong_con_lai, lo_thua.han_su_dung), (4, self.ngay(200)))
+        self.sp.refresh_from_db()
+        self.assertEqual(self.sp.ton_kho, 34)
+        self.assertKhopTon()
+        with self.assertRaises(NghiepVuError):                  # phiếu hệ thống không hủy được
+            huy_phieu_nhap(f"PN-{p.pk}", self.admin, "x")
+
+    def test_kiem_ke_thua_khong_co_hsd(self):
+        self.nhap(5, 20000)
+        p, ct = self.kiem(7)
+        gui_duyet(p, {ct.pk: None})
+        duyet_kiem_ke(p.pk, self.admin)
+        self.assertIsNone(ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}").han_su_dung)
+
+    def test_dem_lan_1_khong_ghi_de(self):
+        self.nhap(5, 20000)
+        p, ct = self.kiem(5)
+        with self.assertRaisesMessage(NghiepVuError, "đã có kết quả đếm lần 1"):
+            ghi_dem(p, 1, {ct.pk: D(9)}, {})
+
+    def test_view_sua_han_lo(self):
+        p = self.nhap(20, 20000, hsd=self.ngay(60))
+        lo = self.lo(p)
+        self.client.force_login(self.nv)
+        self.client.post(f"/nhap-kho/lo/{lo.pk}/sua-han/", {"han_moi": self.ngay(90).isoformat(), "ly_do": "Sai hạn"})
+        lo.refresh_from_db()
+        self.assertEqual(lo.han_su_dung, self.ngay(90))
+        r = self.client.get(f"/nhap-kho/{p.pk}/")
+        self.assertContains(r, "Lịch sử sửa hạn lô")
+        self.assertContains(r, "Sai hạn")
+
+    def test_view_doi_soat_tach_lo(self):
+        p = PhieuNhap.objects.create(ma_phieu_nhap="PN-T4", id_ncc=self.ncc, nguoi_tao=self.nv)
+        ct = ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=10, don_gia_nhap=20000)
+        chuyen_trang_thai_giao(p, PhieuNhap.DANG_GIAO, self.nv)
+        self.client.force_login(self.nv)
+        self.assertEqual(self.client.get(f"/nhap-kho/{p.pk}/doi-soat/").status_code, 200)
+        self.client.post(f"/nhap-kho/{p.pk}/doi-soat/", {
+            "action": "xac_nhan", f"sl_{ct.pk}": "6", f"hsd_{ct.pk}": self.ngay(100).isoformat(),
+            "moi_goc": str(ct.pk), "moi_sl": "4", "moi_hsd": self.ngay(150).isoformat(),
+        })
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuNhap.DA_XAC_NHAN)
+        self.assertEqual(sorted(p.chi_tiet.values_list("so_luong_con_lai", flat=True)), [4, 6])

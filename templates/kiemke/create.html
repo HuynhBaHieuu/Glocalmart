@@ -28,7 +28,7 @@
           <div class="flex flex-wrap gap-2">
             <select x-model="dm" class="input w-auto">
               <option value="">Thêm theo danh mục...</option>
-              <template x-for="d in dms" :key="d.id"><option :value="d.ten" x-text="d.ten"></option></template>
+              <template x-for="d in dms" :key="d.id"><option :value="d.id" x-text="d.ten"></option></template>
             </select>
             <button type="button" class="btn btn-ghost" @click="addCategory()" :disabled="!dm"><i data-lucide="list-plus"></i>Thêm cả danh mục</button>
             <div class="relative w-64" @click.outside="search=''">
@@ -52,7 +52,7 @@
                   <td x-text="it.p.ten"></td>
                   <td class="text-gray-500" x-text="it.p.dm"></td>
                   <td x-text="it.p.dvt"></td>
-                  <td><input type="hidden" name="sp" :value="it.id"><input name="sl" type="number" min="0" step="any" required x-model="it.sl" class="input text-center font-semibold" placeholder="Nhập SL"></td>
+                  <td><input type="hidden" name="sp" :value="it.id"><input name="sl" type="number" min="0" step="1" inputmode="numeric" required x-model="it.sl" @keydown="'.,eE+-'.includes($event.key) && $event.preventDefault()" class="input text-center font-semibold" :class="it.sl !== '' && !isCount(it.sl) && 'err'" placeholder="Nhập SL"></td>
                   <td><input name="note" x-model="it.note" class="input" placeholder="VD: rách bao bì"></td>
                   <td><button type="button" @click="items.splice(i,1)" class="text-red-500">✕</button></td>
                 </tr>
@@ -70,7 +70,7 @@
         <h3 class="mb-3 text-[14px] font-semibold">Hoàn tất đếm lần 1</h3>
         <button class="btn btn-primary w-full" :disabled="!valid"><i data-lucide="save"></i>Lưu kết quả đếm</button>
         <a href="{% url 'kiem' %}" class="btn btn-ghost mt-2 w-full">Hủy</a>
-        <p class="mt-2 text-[11px] text-gray-400" x-show="!valid" x-text="!items.length ? 'Chọn ít nhất 1 sản phẩm.' : (items.length > {{ max_sp }} ? 'Vượt quá {{ max_sp }} sản phẩm.' : 'Nhập số lượng đếm cho tất cả dòng.')"></p>
+        <p class="mt-2 text-[11px] text-gray-400" x-show="!valid" x-text="!items.length ? 'Chọn ít nhất 1 sản phẩm.' : (items.length > {{ max_sp }} ? 'Vượt quá {{ max_sp }} sản phẩm.' : 'Nhập số lượng đếm (số nguyên ≥ 0) cho tất cả dòng.')"></p>
       </div>
       <div class="card border-emerald-200 bg-emerald-50/60 p-5 text-[12px] text-emerald-900">
         <p class="mb-2 font-semibold">Quy trình kiểm kê mù 2 bước</p>
@@ -107,8 +107,17 @@ function kiemKe() {
       if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: '', note: '' });
       this.search = '';
     },
-    addCategory() { products.filter(p => p.dm === this.dm).forEach(p => this.items.length < MAX && this.add(p)); this.dm = ''; },
-    get valid() { return this.items.length && this.items.length <= MAX && this.items.every(i => i.sl !== '' && Number(i.sl) >= 0); },
+    addCategory() {
+      const id = Number(this.dm);
+      const moi = products.filter(p => (p.dm_ids || []).includes(id) && !this.items.some(i => i.id === p.id));
+      if (!moi.length) { alert('Danh mục này (kể cả danh mục con) không còn sản phẩm nào để thêm.'); this.dm = ''; return; }
+      const conCho = MAX - this.items.length;
+      moi.slice(0, conCho).forEach(p => this.items.push({ id: p.id, p, sl: '', note: '' }));
+      if (moi.length > conCho) alert(`Mỗi phiếu tối đa ${MAX} sản phẩm — đã thêm ${Math.max(conCho, 0)}/${moi.length} sản phẩm của danh mục.`);
+      this.dm = '';
+    },
+    isCount(v) { return /^\d+$/.test(String(v).trim()); },
+    get valid() { return this.items.length && this.items.length <= MAX && this.items.every(i => this.isCount(i.sl)); },
   };
 }
 </script>

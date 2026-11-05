@@ -8,7 +8,7 @@
     <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">Báo cáo Xuất - Nhập - Tồn <span class="text-[12px] font-normal text-gray-500">In - Out - Stock Report</span></h1>
     <p class="mt-1 text-[13px] text-gray-500">Tra cứu tình hình biến động kho và lịch sử giao dịch chứng từ đã xác nhận trong khoảng thời gian.</p>
   </div>
-  <button class="btn btn-primary" @click="exp=true"><i data-lucide="file-down"></i>Xuất báo cáo (Excel / PDF)</button>
+  {% if user.is_admin %}<button class="btn btn-primary" @click="exp=true"><i data-lucide="file-down"></i>Xuất báo cáo (Excel / PDF)</button>{% endif %}
 </div>
 
 <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -83,6 +83,7 @@
   {% include "partials/pagination.html" with unit="dòng" %}
 </div>
 
+{% if user.is_admin %}
 <!-- Modal xuất báo cáo -->
 <div x-show="exp" x-transition.opacity x-cloak class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
   <div class="w-full max-w-md rounded-2xl bg-white shadow-2xl" @click.outside="exp=false">
@@ -103,5 +104,6 @@
     </div>
   </div>
 </div>
+{% endif %}
 </div>
 {% endblock %}

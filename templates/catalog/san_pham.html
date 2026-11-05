@@ -151,6 +151,19 @@
             <div class="flex justify-between"><dt class="text-gray-500">Hạn sử dụng</dt><dd>{{ xem.han_su_dung|d }}{% if xem.so_ngay_con_lai is not None %} <span class="text-[11px] text-gray-400">({{ xem.so_ngay_con_lai }} ngày)</span>{% endif %}</dd></div>
             <div class="flex justify-between"><dt class="text-gray-500">Cảnh báo HSD trước</dt><dd>{{ xem.so_ngay_canh_bao }} ngày</dd></div>
           </dl>
+          {% if xem_lo %}
+          <p class="mb-2 mt-4 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Lô còn hàng (thứ tự xuất FEFO)</p>
+          <table class="w-full text-[12px]">
+            <thead><tr class="text-left text-gray-400"><th class="pb-1 font-medium">Lô</th><th class="pb-1 font-medium">HSD</th><th class="pb-1 text-right font-medium">Còn</th></tr></thead>
+            <tbody>
+            {% for lo in xem_lo %}
+            <tr class="border-t"><td class="py-1"><a href="{% url 'nhap_detail' lo.ma_phieu_nhap_id %}" class="text-brand-700 hover:underline">{{ lo.ma_phieu_nhap_id }}</a></td>
+              <td class="py-1">{% if lo.han_su_dung %}{{ lo.han_su_dung|d }}{% else %}<span class="text-gray-400">Không có</span>{% endif %}{% if lo.muc_han and lo.muc_han != 'CON_HAN' %} {% badge lo.muc_han %}{% endif %}</td>
+              <td class="py-1 text-right font-semibold">{{ lo.so_luong_con_lai|qty }}</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          {% endif %}
           <p class="mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-[11.5px] text-gray-500"><i data-lucide="lock" class="h-3.5 w-3.5"></i>Số lượng chỉ được cập nhật qua nghiệp vụ nhập, xuất và điều chỉnh kho.</p>
         </section>
         <section class="px-6 py-4">
@@ -232,9 +245,9 @@
           <input name="so_ngay_canh_bao" type="number" min="0" step="1" x-model="f.so_ngay_canh_bao" class="input" :class="e.so_ngay_canh_bao && 'err'">
         </div>
         <div class="sm:col-span-2">
-          <label class="label">Hạn sử dụng <span class="font-normal text-gray-400">(tùy chọn)</span></label>
-          <input name="han_su_dung" type="date" x-model="f.han_su_dung" class="input">
-          <p class="hint">Tự cập nhật theo lô nhập sớm nhất.</p>
+          <label class="label">Hạn sử dụng <span class="font-normal text-gray-400">(chỉ xem)</span></label>
+          <input class="input" readonly :value="f.han_su_dung ? f.han_su_dung.split('-').reverse().join('/') : 'Tự tính từ các lô'">
+          <p class="hint">Là hạn sớm nhất của các lô còn hàng — nhập theo từng lô ở bước đối soát phiếu nhập.</p>
         </div>
         <div class="sm:col-span-4">
           <label class="label">Hình ảnh <span class="font-normal text-gray-400">(Không bắt buộc)</span></label>

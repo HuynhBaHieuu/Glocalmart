@@ -31,7 +31,7 @@
           </label>
           {% endfor %}
         </div>
-        <p class="hint">Sản phẩm đã quá hạn sử dụng chỉ được xuất với lý do “Hủy hàng”.</p>
+        <p class="hint">Hàng được trừ theo lô FEFO (hạn gần nhất trước). Lô đã hết hạn chỉ được xuất với lý do “Hủy hàng”.</p>
       </div>
 
       <div>
@@ -47,8 +47,10 @@
             <input x-model="search" @keydown.enter.prevent="results[0] && add(results[0])" placeholder="+ Thêm sản phẩm: gõ mã hoặc tên..." class="input pl-9">
             <div x-show="search" class="absolute right-0 z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-white shadow-xl">
               <template x-for="p in results" :key="p.id">
-                <button type="button" @click="add(p)" class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-brand-50" :class="p.ton <= 0 && 'opacity-50'">
-                  <span><span class="block text-[12.5px] font-medium" x-text="p.ten"></span><span class="text-[11px]" :class="p.het_han ? 'text-red-500' : 'text-gray-400'" x-text="p.ma + (p.het_han ? ' · ĐÃ HẾT HẠN' : '')"></span></span>
+                <button type="button" @click="add(p)" :disabled="khoa(p)" :title="khoa(p) ? lyDoKhoa(p) : ''"
+                        class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+                        :class="khoa(p) ? 'cursor-not-allowed bg-gray-50 opacity-50' : ['hover:bg-brand-50', p.ton <= 0 && 'opacity-50']">
+                  <span><span class="block text-[12.5px] font-medium" x-text="p.ten"></span><span class="text-[11px]" :class="p.het_han ? 'text-red-500' : 'text-gray-400'" x-text="p.ma + (p.het_han ? ' · ĐÃ HẾT HẠN' : '') + (khoa(p) ? ' — ' + lyDoKhoa(p) : '')"></span></span>
                   <span class="text-right text-[11px]" :class="p.ton <= 0 ? 'text-red-500' : 'text-gray-500'">Tồn <b x-text="vn(p.ton)"></b> <span x-text="p.dvt"></span></span>
                 </button>
               </template>
@@ -66,8 +68,9 @@
                     <p class="text-[11px] font-medium text-red-600" x-show="errorOf(it)" x-text="errorOf(it)"></p></td>
                   <td class="text-right" x-text="vn(it.p.ton) + ' ' + it.p.dvt"></td>
                   <td><span x-text="it.p.hsd ? it.p.hsd.split('-').reverse().join('/') : '—'"></span>
-                    <span x-show="it.p.het_han" class="ml-1 rounded bg-red-50 px-1.5 text-[10.5px] font-medium text-red-600">Hết hạn</span></td>
-                  <td><input name="sl" type="number" min="0.001" step="any" required :max="it.p.ton" x-model="it.sl" class="input text-right" :class="errorOf(it) && 'err'"></td>
+                    <span x-show="it.p.het_han" class="ml-1 rounded bg-red-50 px-1.5 text-[10.5px] font-medium text-red-600">Có lô hết hạn</span>
+                    <p x-show="it.p.het_han" class="text-[10.5px] text-gray-400" x-text="'Còn hạn: ' + vn(it.p.ton_con_han) + ' ' + it.p.dvt"></p></td>
+                  <td><input name="sl" type="number" min="1" step="1" inputmode="numeric" required :max="it.p.ton" x-model="it.sl" @keydown="'.,eE+-'.includes($event.key) && $event.preventDefault()" class="input text-right" :class="errorOf(it) && 'err'"></td>
                   <td><button type="button" @click="items.splice(i,1)" class="text-red-500 hover:text-red-700"><svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14"/></svg></button></td>
                 </tr>
               </template>
@@ -124,22 +127,32 @@ function phieuXuat() {
       }
       const q = new URLSearchParams(location.search);
       if (q.get('ly_do')) this.ly_do = q.get('ly_do');
-      if (q.get('sp') && byId[q.get('sp')]) this.add(byId[q.get('sp')], true);
+      if (q.get('ghi_chu') && !this.ghi_chu) this.ghi_chu = q.get('ghi_chu');
+      if (q.get('sp') && byId[q.get('sp')]) {
+        this.add(byId[q.get('sp')], true);
+        const it = this.items.find(i => i.id === Number(q.get('sp')));
+        if (it && q.get('sl')) it.sl = Math.floor(Number(q.get('sl')));
+      }
     },
     get results() {
       const q = this.search.trim().toLowerCase();
       if (!q) return [];
       return products.filter(p => !this.items.some(i => i.id === p.id) && (p.ten.toLowerCase().includes(q) || p.ma.toLowerCase().includes(q))).slice(0, 10);
     },
+    // lô hết hạn chỉ được xuất Hủy hàng → Bán hàng / Điều chỉnh chỉ lấy phần thuộc lô còn hạn
+    khoa(p) { return (this.ly_do === 'BAN_HANG' && !p.active) || (this.ly_do && this.ly_do !== 'HUY_HANG' && p.ton > 0 && p.ton_con_han <= 0); },
+    lyDoKhoa(p) { return !p.active && this.ly_do === 'BAN_HANG' ? 'Ngừng kinh doanh, không thể bán' : 'Toàn bộ lô đã hết hạn — chỉ xuất được Hủy hàng'; },
     add(p, all = false) {
-      if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: all ? p.ton : (p.ton > 0 ? 1 : 0) });
+      if (this.khoa(p)) return;
+      if (!this.items.some(i => i.id === p.id)) this.items.push({ id: p.id, p, sl: all ? Math.floor(p.ton) : (p.ton >= 1 ? 1 : 0) });
       this.search = '';
     },
     errorOf(it) {
       const sl = Number(it.sl);
       if (!(sl > 0)) return 'Số lượng phải lớn hơn 0';
+      if (!Number.isInteger(sl)) return 'Số lượng xuất phải là số nguyên';
       if (sl > it.p.ton) return `Vượt tồn kho khả dụng (${vn(it.p.ton)} ${it.p.dvt})`;
-      if (this.ly_do === 'BAN_HANG' && it.p.het_han) return 'Đã quá hạn — chỉ được xuất Hủy hàng';
+      if (this.ly_do && this.ly_do !== 'HUY_HANG' && sl > it.p.ton_con_han) return `Chỉ còn ${vn(it.p.ton_con_han)} ${it.p.dvt} thuộc lô còn hạn — lô hết hạn chỉ xuất Hủy hàng`;
       if (this.ly_do === 'BAN_HANG' && !it.p.active) return 'Sản phẩm ngừng kinh doanh — không thể xuất bán';
       return '';
     },

@@ -122,6 +122,7 @@ class SanPham(models.Model):
     gia_von = models.DecimalField("Giá vốn", **MONEY, default=0)
     ton_kho = models.DecimalField("Tồn kho", **QTY, default=0)
     nguong_toi_thieu = models.DecimalField("Ngưỡng tối thiểu", **QTY, default=0)
+    # Không nhập tay: = hạn sớm nhất của các lô còn hàng (services.cap_nhat_hsd_san_pham)
     han_su_dung = models.DateField("Hạn sử dụng", null=True, blank=True)
     so_ngay_canh_bao = models.IntegerField("Số ngày cảnh báo", default=30)
     anh_sp = models.CharField("Ảnh", max_length=500, null=True, blank=True)
@@ -166,6 +167,18 @@ class SanPham(models.Model):
     @property
     def da_het_han(self):
         return self.muc_han == "DA_HET_HAN"
+
+    def lo_con_hang(self):
+        """Các lô còn hàng, theo thứ tự FEFO (hạn tăng dần, không hạn xếp cuối, cùng hạn thì nhập trước)."""
+        return thu_tu_fefo(ChiTietPhieuNhap.objects.filter(id_sp=self, ma_phieu_nhap__trang_thai=PhieuNhap.DA_XAC_NHAN,
+                                                           so_luong_con_lai__gt=0))
+
+    @property
+    def ton_con_han(self):
+        """Số lượng thuộc các lô chưa hết hạn (được phép bán / điều chỉnh)."""
+        hom_nay = timezone.localdate()
+        return sum((lo.so_luong_con_lai for lo in self.lo_con_hang()
+                    if lo.han_su_dung is None or lo.han_su_dung >= hom_nay), Decimal(0))
 
     @property
     def co_giao_dich(self):
@@ -213,6 +226,8 @@ class PhieuNhap(models.Model):
     TRANG_THAI_GIAO = [(CHO_GIAO, "Chờ giao"), (DANG_GIAO, "Đang giao"), (DA_GIAO, "Đã giao")]
     CHUA_XAC_NHAN, DA_XAC_NHAN, DA_HUY = "CHUA_XAC_NHAN", "DA_XAC_NHAN", "DA_HUY"
     TRANG_THAI = [(CHUA_XAC_NHAN, "Chưa xác nhận"), (DA_XAC_NHAN, "Đã xác nhận"), (DA_HUY, "Đã hủy")]
+    # Phiếu hệ thống chứa phần tồn kho cũ không thuộc lô nhập nào (xem wms/lo.py)
+    MA_TON_DAU = "PN-TONDAU"
 
     ma_phieu_nhap = models.CharField(max_length=20, primary_key=True)
     id_ncc = models.ForeignKey(NhaCungCap, on_delete=models.PROTECT, related_name="phieu_nhap", db_column="id_ncc")
@@ -237,6 +252,11 @@ class PhieuNhap(models.Model):
         return self.ma_phieu_nhap
 
     @property
+    def la_phieu_he_thong(self):
+        """Phiếu do hệ thống tạo: Tồn đầu kỳ, hoặc PN-KK-… chứa lô hàng thừa khi kiểm kê."""
+        return self.ma_phieu_nhap == self.MA_TON_DAU or self.ma_phieu_nhap.startswith("PN-KK-")
+
+    @property
     def tong_tien(self):
         return sum((ct.thanh_tien for ct in self.chi_tiet.all()), Decimal(0))
 
@@ -259,14 +279,38 @@ class ChiTietPhieuNhap(models.Model):
     han_su_dung = models.DateField(null=True, blank=True)
     ly_do_chenh_lech = models.CharField(max_length=20, choices=LY_DO, null=True, blank=True)
     ghi_chu_doi_soat = models.TextField(null=True, blank=True)
+    # Mỗi dòng của phiếu đã xác nhận là 1 LÔ; đây là số lượng của lô còn trong kho.
+    so_luong_con_lai = models.DecimalField("SL còn lại của lô", **QTY, default=0)
 
     class Meta:
         db_table = "chi_tiet_phieu_nhap"
         ordering = ["id_chi_tiet"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(so_luong_con_lai__gte=0), name="ct_nhap_sl_con_lai_khong_am"),
+        ]
 
     @property
     def thanh_tien(self):
         return self.so_luong_dat * self.don_gia_nhap
+
+    # ---- lô hàng
+    @property
+    def la_dong_tach(self):
+        """Dòng thêm lúc đối soát để nhận cùng sản phẩm với hạn sử dụng khác (không có SL đặt)."""
+        return self.so_luong_dat == 0
+
+    @property
+    def so_ngay_con_lai(self):
+        return None if not self.han_su_dung else (self.han_su_dung - timezone.localdate()).days
+
+    @property
+    def muc_han(self):
+        d = self.so_ngay_con_lai
+        if d is None:
+            return None
+        if d < 0:
+            return "DA_HET_HAN"
+        return "SAP_HET_HAN" if d <= self.id_sp.so_ngay_canh_bao else "CON_HAN"
 
     @property
     def thanh_tien_thuc(self):
@@ -324,6 +368,22 @@ class ChiTietPhieuXuat(models.Model):
     class Meta:
         db_table = "chi_tiet_phieu_xuat"
         ordering = ["id_chi_tiet"]
+
+
+class PhanBoLoXuat(models.Model):
+    """Phiếu xuất đã lấy bao nhiêu từ lô nào — để hủy phiếu thì trả về đúng lô."""
+    ct_xuat = models.ForeignKey(ChiTietPhieuXuat, on_delete=models.CASCADE, related_name="phan_bo")
+    lo = models.ForeignKey(ChiTietPhieuNhap, on_delete=models.PROTECT, related_name="phan_bo_xuat")
+    so_luong = models.DecimalField(**QTY)
+
+    class Meta:
+        db_table = "phan_bo_lo_xuat"
+        ordering = ["id"]
+
+
+def thu_tu_fefo(qs):
+    return qs.order_by(models.F("han_su_dung").asc(nulls_last=True), "ma_phieu_nhap__ngay_xac_nhan",
+                       "ma_phieu_nhap__ngay_tao", "id_chi_tiet")
 
 
 # ---------------------------------------------------------------- PHIEU_KIEM_KE
@@ -384,6 +444,8 @@ class ChiTietPhieuKiemKe(models.Model):
     sl_chenh_lech = models.DecimalField(**QTY, default=0)
     don_vi = models.CharField(max_length=30)
     ghi_chu = models.CharField(max_length=255, blank=True, default="")
+    hsd_thua_da_khai_bao = models.BooleanField(default=False)
+    han_su_dung_thua = models.DateField(null=True, blank=True)  # NULL + đã khai báo = hàng không có HSD
 
     class Meta:
         db_table = "chi_tiet_phieu_kiem_ke"
@@ -397,11 +459,17 @@ class ChiTietPhieuKiemKe(models.Model):
     def gia_tri_chenh_lech(self):
         return (self.sl_chenh_lech or 0) * (self.gia_von or 0)
 
+    @property
+    def sl_thua(self):
+        return self.sl_chenh_lech if self.sl_chenh_lech and self.sl_chenh_lech > 0 else 0
+
 
 # ---------------------------------------------------------------- NHAT_KY_KHO
 class NhatKyKho(models.Model):
-    NHAP_KHO, XUAT_KHO, KIEM_KE = "NHAP_KHO", "XUAT_KHO", "KIEM_KE"
-    LOAI = [(NHAP_KHO, "Nhập kho"), (XUAT_KHO, "Xuất kho"), (KIEM_KE, "Kiểm kê")]
+    NHAP_KHO, XUAT_KHO, KIEM_KE, SUA_HAN_LO = "NHAP_KHO", "XUAT_KHO", "KIEM_KE", "SUA_HAN_LO"
+    LOAI = [(NHAP_KHO, "Nhập kho"), (XUAT_KHO, "Xuất kho"), (KIEM_KE, "Kiểm kê"), (SUA_HAN_LO, "Sửa hạn lô")]
+    # loại làm thay đổi số lượng — báo cáo N-X-T chỉ tính các loại này
+    LOAI_BIEN_DONG = [NHAP_KHO, XUAT_KHO, KIEM_KE]
 
     id_nhat_ky = models.AutoField(primary_key=True)
     loai_giao_dich = models.CharField(max_length=20, choices=LOAI)
@@ -417,6 +485,12 @@ class NhatKyKho(models.Model):
     sl_thay_doi = models.DecimalField(**QTY)
     nguoi_thuc_hien = models.ForeignKey(NguoiDung, on_delete=models.PROTECT, related_name="nhat_ky_kho")
     ngay_tao = models.DateTimeField(default=timezone.now)
+    # chỉ dùng cho SUA_HAN_LO
+    lo = models.ForeignKey("ChiTietPhieuNhap", null=True, blank=True, on_delete=models.PROTECT, related_name="nhat_ky",
+                           db_column="id_lo")
+    han_cu = models.DateField(null=True, blank=True)
+    han_moi = models.DateField(null=True, blank=True)
+    ly_do = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = "nhat_ky_kho"

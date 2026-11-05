@@ -1,78 +1,67 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Đăng nhập{% endblock %}
+{% block head %}
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:wght@700&family=Cabin:wght@600;700&display=swap&subset=vietnamese" rel="stylesheet">
+<style>
+  .login-bg { background-color: #0B4C34; }
+  /* ảnh cửa hàng bên phải, mờ dần sang nền xanh bên trái */
+  .login-photo { background: linear-gradient(90deg, #0B4C34 0%, rgb(11 76 52 / .85) 18%, rgb(11 76 52 / .35) 45%, rgb(11 76 52 / .15) 100%),
+                 url("{% static 'img/login-bg.jpg' %}") center / cover no-repeat; }
+  .font-brand { font-family: 'Cabin', 'Inter', sans-serif; }
+  .font-serif-vn { font-family: 'Alegreya', Georgia, serif; }
+  .login-input { width: 100%; height: 38px; border: 0; border-radius: 8px; background: #F2F2F2; padding: 0 12px; font-size: 14px; }
+  .login-input:focus { outline: none; box-shadow: 0 0 0 2px #5A2E0A33; background: #EDEDED; }
+  .login-input.err { box-shadow: 0 0 0 2px #F87171; background: #FEF2F2; }
+</style>
+{% endblock %}
 {% block body %}
-<div class="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-  <!-- Bên trái: nhận diện thương hiệu -->
-  <section class="relative hidden overflow-hidden bg-brand-800 text-white lg:flex lg:flex-col lg:justify-between lg:p-12">
-    <div class="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-white/5"></div>
-    <div class="absolute -bottom-32 -left-20 h-[28rem] w-[28rem] rounded-full bg-brand-900/60"></div>
-    <div class="relative flex items-center gap-3">
-      <span class="grid h-11 w-11 place-items-center rounded-xl bg-white text-brand-800"><i data-lucide="package" class="h-6 w-6"></i></span>
-      <div>
-        <p class="text-lg font-bold leading-tight">G'Local Mart WH</p>
-        <p class="text-xs text-white/60">Warehouse Management System</p>
-      </div>
+<div class="login-bg relative flex min-h-screen overflow-hidden">
+  <!-- Ảnh cửa hàng (nửa phải) -->
+  <div class="login-photo absolute inset-y-0 right-0 hidden w-[52%] md:block"></div>
+
+  <!-- Thương hiệu + form (nửa trái) -->
+  <div class="relative z-10 flex w-full flex-col items-center justify-center px-6 py-10 md:w-[48%]">
+    <div class="mb-10 text-center text-white">
+      <p class="font-brand text-[44px] font-bold leading-none tracking-wide sm:text-[52px]">G’LOCAL</p>
+      <p class="font-brand mt-3 flex items-center justify-center gap-3 text-[18px] font-semibold sm:text-[22px]">
+        <span class="tracking-[-.1em] opacity-90">-----</span><span class="tracking-[.45em]">MART &amp; CAFE</span><span class="tracking-[-.1em] opacity-90">-----</span>
+      </p>
     </div>
-    <div class="relative max-w-md">
-      <h1 class="text-[34px] font-semibold leading-tight">Quản lý kho &amp; chuỗi cung ứng<br>G'Local Mart &amp; Cafe</h1>
-      <p class="mt-4 text-[14px] leading-relaxed text-white/70">Số hóa toàn bộ quy trình Nhập – Xuất – Tồn, kiểm kê mù 2 bước và cảnh báo tồn kho, hạn sử dụng theo thời gian thực.</p>
-      <div class="mt-8 grid grid-cols-3 gap-3 text-center">
-        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="arrow-down-left" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Nhập kho</p></div>
-        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="arrow-up-right" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Xuất kho</p></div>
-        <div class="rounded-xl bg-white/10 p-4"><i data-lucide="clipboard-check" class="mx-auto h-5 w-5"></i><p class="mt-2 text-xs text-white/80">Kiểm kê</p></div>
-      </div>
-    </div>
-    <p class="relative text-xs text-white/50">Quản lý tập trung, vận hành chính xác.</p>
-  </section>
 
-  <!-- Bên phải: form -->
-  <section class="flex items-center justify-center bg-page p-6">
-    <div class="w-full max-w-[400px]">
-      <div class="mb-8 flex items-center gap-3 lg:hidden">
-        <span class="grid h-10 w-10 place-items-center rounded-xl bg-brand-800 text-white"><i data-lucide="package" class="h-5 w-5"></i></span>
-        <p class="text-lg font-bold text-brand-800">G'Local Mart WH</p>
+    <div class="w-full max-w-[340px] overflow-hidden rounded-[22px] bg-white shadow-2xl">
+      <div class="bg-[#5A2E0A] py-3.5 text-center">
+        <h1 class="font-serif-vn text-[21px] font-bold tracking-wide text-white">ĐĂNG NHẬP</h1>
       </div>
-      <h2 class="text-[26px] font-semibold text-gray-900">Đăng nhập</h2>
-      <p class="mt-1 text-[13px] text-gray-500">Sử dụng tài khoản do Quản trị viên cấp để truy cập hệ thống.</p>
-
-      {% if error %}
-      <div class="mt-6 flex items-start gap-2.5 rounded-xl border {% if locked %}border-red-300 bg-red-50 text-red-700{% else %}border-red-200 bg-red-50 text-red-600{% endif %} px-4 py-3 text-[13px]">
-        <i data-lucide="{% if locked %}lock{% else %}circle-alert{% endif %}" class="mt-0.5 h-4 w-4 shrink-0"></i>
-        <span>{{ error }}</span>
-      </div>
-      {% endif %}
-
-      <form method="post" class="mt-6 space-y-4" x-data="{ show:false }">
+      <form method="post" class="px-6 pb-6 pt-5" x-data="{ show:false }">
         {% csrf_token %}
-        <div>
-          <label class="label" for="username">Tên đăng nhập</label>
-          <div class="relative">
-            <i data-lucide="user" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
-            <input id="username" name="username" value="{{ username }}" autofocus autocomplete="username" required
-                   class="input h-11 pl-9 {% if error %}err{% endif %}" placeholder="VD: admin">
-          </div>
+        {% if error %}
+        <div class="mb-4 flex items-start gap-2 rounded-lg {% if locked %}bg-red-100 text-red-800{% else %}bg-red-50 text-red-600{% endif %} px-3 py-2 text-[12.5px]">
+          <i data-lucide="{% if locked %}lock{% else %}circle-alert{% endif %}" class="mt-0.5 h-4 w-4 shrink-0"></i>
+          <span>{{ error }}</span>
         </div>
-        <div>
-          <label class="label" for="password">Mật khẩu</label>
-          <div class="relative">
-            <i data-lucide="lock" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
-            <input id="password" name="password" :type="show ? 'text' : 'password'" type="password" autocomplete="current-password" required
-                   class="input h-11 pl-9 pr-10 {% if error %}err{% endif %}" placeholder="••••••••">
-            <button type="button" @click="show=!show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabindex="-1">
-              <i data-lucide="eye" class="h-4 w-4"></i>
-            </button>
-          </div>
+        {% endif %}
+        <label for="username" class="mb-1.5 block text-[16px] font-bold text-gray-900">Username</label>
+        <input id="username" name="username" value="{{ username }}" autofocus autocomplete="username" required
+               class="login-input {% if error %}err{% endif %}" placeholder="VD: admin">
+        <label for="password" class="mb-1.5 mt-4 block text-[16px] font-bold text-gray-900">Password</label>
+        <div class="relative">
+          <input id="password" name="password" :type="show ? 'text' : 'password'" type="password" autocomplete="current-password" required
+                 class="login-input pr-10 {% if error %}err{% endif %}">
+          <button type="button" @click="show=!show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabindex="-1" title="Hiện / ẩn mật khẩu">
+            <i data-lucide="eye" class="h-4 w-4"></i>
+          </button>
         </div>
-        <button class="btn btn-primary h-11 w-full text-[14px]">Đăng nhập <i data-lucide="arrow-right"></i></button>
+        <div class="mt-5 text-center">
+          <button class="rounded-full bg-[#5A2E0A] px-6 py-2 text-[13px] font-bold text-white shadow transition hover:bg-[#46230A]">Log in</button>
+        </div>
       </form>
-
-      <div class="mt-6 rounded-xl border border-dashed border-brand-200 bg-white p-4 text-[12px] text-gray-600">
-        <p class="mb-1.5 font-semibold text-brand-800">Tài khoản demo</p>
-        <p>Quản trị viên: <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">admin</code> / <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">Admin@123</code></p>
-        <p class="mt-1">Nhân viên: <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">nvkho_002</code> / <code class="rounded bg-brand-50 px-1.5 py-0.5 text-brand-800">Nhanvien@123</code></p>
-        <p class="mt-2 text-[11px] text-gray-400">Nhập sai mật khẩu 5 lần liên tiếp, tài khoản sẽ bị tạm khóa.</p>
-      </div>
     </div>
-  </section>
+
+    <p class="mt-6 max-w-[340px] text-center text-[11px] leading-relaxed text-white/50">
+      Demo — Quản trị viên: <b class="text-white/70">admin / Admin@123</b> · Nhân viên: <b class="text-white/70">nvkho_002 / Nhanvien@123</b><br>
+      Nhập sai mật khẩu 5 lần liên tiếp, tài khoản sẽ bị tạm khóa.
+    </p>
+  </div>
 </div>
 {% endblock %}

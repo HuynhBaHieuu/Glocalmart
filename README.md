@@ -20,13 +20,13 @@ openpyxl (Excel) · ReportLab (PDF) · Deploy trên Vercel.
 | Phân hệ | Đã cài đặt |
 |---|---|
 | Đăng nhập & phân quyền | Đăng nhập username/mật khẩu (hash), khóa tự động sau 5 lần sai, reset bộ đếm khi đúng, Admin mở khóa / vô hiệu hóa mềm, không tự đăng ký. Nhân viên bị ẩn & chặn mọi thao tác xóa. |
-| Danh mục | Cây cha – con, tên không trùng trong cùng cha, chặn xóa khi còn sản phẩm / danh mục con, không cho chọn chính nó làm cha. |
-| Sản phẩm | Mã SP duy nhất, giá vốn bình quân tự tính, tồn kho chỉ đọc, ngưỡng tối thiểu, HSD + số ngày cảnh báo, ảnh (Supabase Storage), xóa → tự chuyển Ngừng bán nếu đã có giao dịch, drawer chi tiết, xuất Excel. |
+| Danh mục | Cây cha – con, tên không trùng trong cùng cha, danh mục đang hoạt động chỉ xóa được khi trống; Admin xóa được danh mục đã ngừng hoạt động (SP chuyển sang danh mục cha hoặc “Chưa phân loại”), không cho chọn chính nó làm cha. |
+| Sản phẩm | Mã SP duy nhất, giá vốn bình quân tự tính, tồn kho chỉ đọc, ngưỡng tối thiểu, HSD chỉ hiển thị (= hạn sớm nhất của các lô còn hàng) + số ngày cảnh báo, danh sách lô theo thứ tự FEFO trong drawer, ảnh (Supabase Storage), xóa → tự chuyển Ngừng bán nếu đã có giao dịch, xuất Excel. |
 | Nhà cung cấp | CRUD, ngừng hoạt động (xóa mềm), xuất Excel. |
-| Nhập kho | Tạo phiếu (xem trước trước khi lưu) → Chờ giao → Đang giao → Đối soát (SL thực nhận, HSD lô, lý do chênh lệch bắt buộc) → Đã giao + cộng tồn, giá vốn bình quân, HSD sớm nhất. Không nhảy cóc trạng thái. In phiếu. |
-| Xuất kho | Lý do Bán hàng / Hủy hàng / Điều chỉnh, kiểm tra tồn thời gian thực (khóa dòng `SELECT … FOR UPDATE`), chặn xuất âm, hàng hết hạn chỉ được Hủy hàng, trừ tồn khi xác nhận. |
-| Kiểm kê | Tối đa 30 SP/phiếu, đếm mù lần 1 (ẩn tồn hệ thống), gắn cờ & đếm lần 2 dòng lệch, gửi duyệt, Quản lý xem chênh lệch + giá trị thất thoát → Duyệt & cân bằng tồn / Từ chối / Xóa. |
-| Báo cáo & cảnh báo | Dashboard: thẻ Hết hàng (đỏ) / Sắp hết (cam), Hết hạn / Sắp hết hạn, biểu đồ tròn. Báo cáo N-X-T theo thời gian / danh mục / sản phẩm, xuất Excel & PDF có người xuất + thời gian. |
+| Nhập kho | Tạo phiếu (xem trước trước khi lưu) → Chờ giao → Đang giao → Đối soát (SL thực nhận, **HSD nhập tay từng lô**, “+ Lô” khi cùng SP giao về 2 hạn, lý do chênh lệch tính theo tổng SP, lô cận hạn/hết hạn phải xác nhận lại kèm lý do) → Đã giao: mỗi dòng thành 1 **lô** (`so_luong_con_lai`), cộng tồn, giá vốn bình quân. “Sửa hạn lô” sau khi nhập (bắt buộc lý do, ghi nhật ký kho). Hủy phiếu đã xác nhận chỉ khi lô chưa bị xuất bớt. In phiếu có cột HSD. |
+| Xuất kho | Lý do Bán hàng / Hủy hàng / Điều chỉnh, kiểm tra tồn thời gian thực (khóa dòng `SELECT … FOR UPDATE`), chặn xuất âm. Khi xác nhận: trừ theo **FEFO** (hạn tăng dần, không hạn xếp cuối, cùng hạn thì lô nhập trước), ghi phân bổ lô; không đủ → rollback “Không đủ hàng trong các lô”. Lô hết hạn chỉ xuất được với Hủy hàng. Hủy phiếu đã xác nhận trả hàng về đúng lô đã lấy. |
+| Kiểm kê | Tối đa 30 SP/phiếu, đếm mù lần 1 (ẩn tồn hệ thống), gắn cờ & đếm lần 2 dòng lệch, gửi duyệt (phần **thừa** phải nhập tay HSD), Quản lý xem chênh lệch + giá trị thất thoát → Duyệt: thiếu trừ theo FEFO, thừa tạo lô mới `PN-KK-…` / Từ chối / Xóa. Danh sách chỉ hiện phiếu đã gửi duyệt. |
+| Báo cáo & cảnh báo | Dashboard: thẻ Hết hàng / Sắp hết hàng / Đã hết hạn / Sắp hết hạn, 2 biểu đồ tròn (tồn kho, hạn sử dụng). Cảnh báo hạn **theo lô** (Mã SP, Lô, SL còn của lô, Tổng tồn, HSD, Còn x ngày) + nút Tạo phiếu xuất; Admin xuất Excel từng tab. Báo cáo N-X-T (bỏ qua nhật ký sửa hạn) theo thời gian / danh mục / sản phẩm, xuất Excel & PDF (chỉ Admin). |
 | REST API | `GET /api/san-pham/`, `/api/san-pham/<ma_sp>/`, `/api/ton-kho/<ma_sp>/`, `/api/danh-muc/` — header `X-API-Key`. Admin tạo / thu hồi key trong *Quản lý tài khoản → REST API Key*. |
 | Nguyên tắc chung | Mã chứng từ `PREFIX-YYMM-####` reset theo tháng, mọi thay đổi tồn qua `post_stock_move()` và ghi `nhat_ky_kho`, mọi thao tác ghi lưu `audit_log`, chứng từ đã xác nhận chỉ được Hủy kèm lý do (hoàn tồn tự động). |
 
@@ -38,10 +38,11 @@ thời gian thực mỗi lần mở trang; PDF dùng ReportLab thay cho WeasyPri
 ```
 config/            settings, urls, wsgi (entry cho Vercel)
 wms/models.py      ERD: nguoi_dung, danh_muc, san_pham, nha_cung_cap, phieu_nhap/xuat/kiem_ke + chi tiết, nhat_ky_kho, audit_log, api_key, doc_sequence
-wms/services.py    nghiệp vụ: next_doc_code, post_stock_move, xác nhận nhập/xuất, đếm/duyệt kiểm kê
+wms/services.py    nghiệp vụ: next_doc_code, post_stock_move, xác nhận nhập/xuất, đếm/duyệt kiểm kê, lô FEFO (tru_ton_fefo, sua_han_lo, canh_bao_han_su_dung)
+wms/lo.py          chuyển tồn kho cũ sang lô (migration 0003, lệnh `kiem_tra_lo`)
 wms/views/         dashboard, catalog, nhap, xuat, kiemke, baocao, taikhoan, auth
 wms/api*.py        REST API + xác thực API Key
-wms/tests.py       17 test cho các quy tắc nghiệp vụ
+wms/tests.py       49 test cho các quy tắc nghiệp vụ
 templates/         giao diện theo Figma
 ```
 

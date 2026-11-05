@@ -18,6 +18,13 @@
   {% endfor %}
 </div>
 
+{% if phieu_dang_kiem %}
+<div class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-[12.5px] text-blue-800">
+  <i data-lucide="info" class="h-4 w-4"></i>Bạn có phiếu đang đếm dở, chưa gửi duyệt:
+  {% for ma in phieu_dang_kiem %}<a href="{% url 'kiem_detail' ma %}" class="font-semibold underline">{{ ma }}</a>{% if not forloop.last %},{% endif %}{% endfor %}
+</div>
+{% endif %}
+
 <div class="card overflow-hidden">
   <form class="flex flex-wrap items-center gap-3 px-5 py-4">
     <input type="hidden" name="tt" value="{{ tt }}">
@@ -37,8 +44,8 @@
         <td>{{ p.nguoi_tao.ho_ten }}</td>
         <td class="text-center">{{ p.chi_tiet.all|length }}</td>
         <td class="text-gray-500">{{ p.nguoi_duyet.ho_ten|default:"—" }}</td>
-        <td>{% badge p.trang_thai %}{% if p.trang_thai == 'DANG_KIEM' and p.can_dem_lan_2 %} <span class="text-[11px] text-orange-600">· chờ đếm lần 2</span>{% endif %}</td>
-        <td><a href="{% url 'kiem_detail' p.pk %}" class="text-[12.5px] font-semibold text-brand-800 hover:underline">{% if p.trang_thai == 'CHO_DUYET' and user.is_admin %}Duyệt phiếu{% elif p.trang_thai == 'DANG_KIEM' %}Tiếp tục đếm{% else %}Xem chi tiết{% endif %}</a></td>
+        <td>{% badge p.trang_thai %}</td>
+        <td><a href="{% url 'kiem_detail' p.pk %}" class="text-[12.5px] font-semibold text-brand-800 hover:underline">{% if p.trang_thai == 'CHO_DUYET' and user.is_admin %}Duyệt phiếu{% else %}Xem chi tiết{% endif %}</a></td>
       </tr>
       {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Chưa có phiếu kiểm kê.</td></tr>{% endfor %}
       </tbody>

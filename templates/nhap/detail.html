@@ -9,12 +9,9 @@
     <h1 class="text-[20px] font-semibold text-gray-900">Cập nhật trạng thái giao hàng</h1>
   </div>
   <a href="{% url 'nhap_print' p.pk %}" target="_blank" class="btn btn-outline"><i data-lucide="printer"></i>In phiếu</a>
-  {% if p.trang_thai != 'DA_HUY' %}{% if p.trang_thai == 'CHUA_XAC_NHAN' or user.is_admin %}
+  {% if p.trang_thai != 'DA_HUY' and not p.la_phieu_he_thong %}{% if p.trang_thai == 'CHUA_XAC_NHAN' or user.is_admin %}
   <button class="btn btn-danger" @click="$dispatch('open-huy')"><i data-lucide="ban"></i>Hủy phiếu</button>
   {% endif %}{% endif %}
-  {% if user.is_admin and p.trang_thai == 'CHUA_XAC_NHAN' and p.trang_thai_giao == 'CHO_GIAO' %}
-  {% url 'nhap_delete' p.pk as del_url %}{% include "partials/confirm_form.html" with action=del_url label="Xóa nháp" cls="btn btn-danger" icon="trash-2" msg="Xóa vĩnh viễn phiếu nháp này?" %}
-  {% endif %}
 </div>
 
 {% if p.trang_thai == 'DA_HUY' %}
@@ -96,31 +93,65 @@
     {% endif %}
 
     <!-- Chi tiết sản phẩm -->
-    <div class="card overflow-hidden">
-      <div class="card-head"><i data-lucide="package" class="h-4 w-4"></i>Chi tiết sản phẩm nhập <span class="ml-auto rounded-full bg-white/15 px-2 py-0.5 text-[11px]">{{ chi_tiet|length }} sản phẩm</span></div>
+    <div class="card overflow-hidden" x-data="{ sua: null }">
+      <div class="card-head"><i data-lucide="package" class="h-4 w-4"></i>Chi tiết sản phẩm nhập <span class="ml-auto rounded-full bg-white/15 px-2 py-0.5 text-[11px]">{{ chi_tiet|length }} lô</span></div>
       <div class="overflow-x-auto">
         <table class="tbl compact">
-          <thead><tr><th>#</th><th>Tên sản phẩm / Mã SKU</th><th>ĐVT</th><th class="text-right">SL đặt</th><th class="text-right">Đơn giá</th><th class="text-right">SL thực nhận</th><th class="text-right">Chênh lệch</th><th>Lý do</th><th>Hạn sử dụng</th><th class="text-right">Thành tiền</th></tr></thead>
+          <thead><tr><th>#</th><th>Tên sản phẩm / Mã SKU</th><th>ĐVT</th><th class="text-right">SL đặt</th><th class="text-right">Đơn giá</th><th class="text-right">SL thực nhận</th><th class="text-right">Chênh lệch</th><th>Lý do</th><th>Hạn sử dụng</th>{% if p.trang_thai == 'DA_XAC_NHAN' %}<th class="text-right">Còn lại (lô)</th>{% endif %}<th class="text-right">Thành tiền</th></tr></thead>
           <tbody>
           {% for ct in chi_tiet %}
-          <tr class="{% if ct.chenh_lech %}bg-red-50/40{% endif %}">
+          <tr class="{% if ct.cl_nhom %}bg-red-50/40{% endif %}">
             <td class="text-gray-400">{{ forloop.counter }}</td>
-            <td><p class="font-medium">{{ ct.id_sp.ten_sp }}</p><p class="text-[11px] text-gray-400">SKU: {{ ct.id_sp.ma_sp }}</p></td>
+            <td><p class="font-medium">{{ ct.id_sp.ten_sp }}</p><p class="text-[11px] text-gray-400">SKU: {{ ct.id_sp.ma_sp }}</p>
+              {% if ct.la_dong_tach %}<p class="mt-0.5 inline-block rounded bg-blue-50 px-1.5 text-[10.5px] font-medium text-blue-700">Lô thêm — cùng SP, khác hạn</p>{% endif %}</td>
             <td>{{ ct.id_sp.don_vi }}</td>
-            <td class="text-right">{{ ct.so_luong_dat|qty }}</td>
+            <td class="text-right">{% if ct.la_dong_tach %}—{% else %}{{ ct.so_luong_dat|qty }}{% endif %}</td>
             <td class="text-right">{{ ct.don_gia_nhap|money }}</td>
             <td class="text-right font-semibold">{{ ct.so_luong_thuc_nhan|qty }}</td>
-            <td class="text-right">{% if ct.chenh_lech is not None %}<span class="rounded px-1.5 py-0.5 text-[11.5px] font-semibold {% if ct.chenh_lech < 0 %}bg-red-50 text-red-600{% elif ct.chenh_lech > 0 %}bg-blue-50 text-blue-600{% else %}bg-emerald-50 text-emerald-700{% endif %}">{{ ct.chenh_lech|signed }}</span>{% else %}—{% endif %}</td>
+            <td class="text-right">{% if ct.cl_nhom is not None %}<span class="rounded px-1.5 py-0.5 text-[11.5px] font-semibold {% if ct.cl_nhom < 0 %}bg-red-50 text-red-600{% elif ct.cl_nhom > 0 %}bg-blue-50 text-blue-600{% else %}bg-emerald-50 text-emerald-700{% endif %}">{{ ct.cl_nhom|signed }}</span>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
             <td>{% if ct.ly_do_chenh_lech %}{% badge ct.ly_do_chenh_lech %}{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
-            <td>{{ ct.han_su_dung|d }}</td>
+            <td class="whitespace-nowrap">
+              {% if ct.han_su_dung %}{{ ct.han_su_dung|d }}{% else %}<span class="text-gray-400">Không có HSD</span>{% endif %}
+              {% if p.trang_thai == 'DA_XAC_NHAN' and ct.muc_han and ct.muc_han != 'CON_HAN' and ct.so_luong_con_lai > 0 %} {% badge ct.muc_han %}{% endif %}
+              {% if p.trang_thai == 'DA_XAC_NHAN' and ct.so_luong_con_lai > 0 %}
+              <button type="button" class="ml-1 inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-700 hover:underline"
+                      @click="sua = { id: {{ ct.pk }}, ten: '{{ ct.id_sp.ten_sp|escapejs }}', han: '{{ ct.han_su_dung|iso }}' }; $nextTick(icons)"><i data-lucide="pencil" class="h-3 w-3"></i>Sửa hạn lô</button>
+              {% endif %}
+              {% if ct.ghi_chu_doi_soat %}<p class="mt-0.5 max-w-[220px] whitespace-normal text-[10.5px] text-amber-700">{{ ct.ghi_chu_doi_soat }}</p>{% endif %}
+            </td>
+            {% if p.trang_thai == 'DA_XAC_NHAN' %}<td class="text-right {% if ct.so_luong_con_lai == 0 %}text-gray-400{% else %}font-semibold{% endif %}">{{ ct.so_luong_con_lai|qty }}</td>{% endif %}
             <td class="text-right font-semibold">{{ ct.thanh_tien_thuc|money }}</td>
           </tr>
           {% endfor %}
           </tbody>
-          <tfoot><tr class="bg-brand-50/60"><td colspan="9" class="px-3 py-3 text-right font-semibold">Tổng giá trị {% if p.trang_thai == 'DA_XAC_NHAN' %}thực nhận{% else %}đặt hàng{% endif %}</td><td class="px-3 text-right text-[15px] font-bold text-brand-800">{% if p.trang_thai == 'DA_XAC_NHAN' %}{{ p.tong_tien_thuc|vnd }}{% else %}{{ p.tong_tien|vnd }}{% endif %}</td></tr></tfoot>
+          <tfoot><tr class="bg-brand-50/60"><td colspan="{% if p.trang_thai == 'DA_XAC_NHAN' %}10{% else %}9{% endif %}" class="px-3 py-3 text-right font-semibold">Tổng giá trị {% if p.trang_thai == 'DA_XAC_NHAN' %}thực nhận{% else %}đặt hàng{% endif %}</td><td class="px-3 text-right text-[15px] font-bold text-brand-800">{% if p.trang_thai == 'DA_XAC_NHAN' %}{{ p.tong_tien_thuc|vnd }}{% else %}{{ p.tong_tien|vnd }}{% endif %}</td></tr></tfoot>
         </table>
       </div>
       {% if p.ghi_chu_doi_soat %}<div class="border-t px-5 py-3 text-[12.5px]"><span class="font-semibold">Ghi chú đối soát:</span> {{ p.ghi_chu_doi_soat }}</div>{% endif %}
+      {% if sua_han %}
+      <div class="border-t px-5 py-3">
+        <p class="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold"><i data-lucide="calendar-clock" class="h-3.5 w-3.5"></i>Lịch sử sửa hạn lô</p>
+        <ul class="space-y-1 text-[12px] text-gray-600">
+          {% for l in sua_han %}<li><b>{{ l.id_sp.ten_sp }}</b>: {{ l.han_cu|d }} → <b>{{ l.han_moi|d }}</b> · {{ l.nguoi_thuc_hien.ho_ten }} · {{ l.ngay_tao|dt }} — <i>{{ l.ly_do }}</i></li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <!-- Modal sửa hạn lô -->
+      <div x-show="sua" x-cloak class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+        <form method="post" :action="sua && '/nhap-kho/lo/' + sua.id + '/sua-han/'" class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" @click.outside="sua=null" x-data="{ khong: false }">
+          {% csrf_token %}
+          <h3 class="text-[16px] font-semibold">Sửa hạn sử dụng của lô</h3>
+          <p class="mt-1 text-[12.5px] text-gray-500"><span x-text="sua && sua.ten"></span> · Phiếu {{ p.pk }} — chỉ sửa hạn, không đổi số lượng. Thay đổi được ghi vào nhật ký kho.</p>
+          <div class="mt-4 grid gap-3">
+            <div><label class="label">Hạn hiện tại</label><input class="input" readonly :value="sua && sua.han ? sua.han.split('-').reverse().join('/') : 'Không có HSD'"></div>
+            <div><label class="label">Hạn mới <span class="text-red-500">*</span></label><input type="date" name="han_moi" class="input" :disabled="khong" :required="!khong">
+              <label class="mt-1.5 flex items-center gap-2 text-[12px]"><input type="checkbox" name="khong_hsd" x-model="khong" class="rounded border-gray-300 text-brand-700"> Lô không có hạn sử dụng</label></div>
+            <div><label class="label">Lý do sửa <span class="text-red-500">*</span></label><textarea name="ly_do" rows="2" required class="input" placeholder="VD: Nhập nhầm hạn khi đối soát, hạn đúng in trên bao bì là ..."></textarea></div>
+          </div>
+          <div class="mt-5 flex justify-end gap-2"><button type="button" class="btn btn-ghost" @click="sua=null">Đóng</button><button class="btn btn-primary">Lưu hạn mới</button></div>
+        </form>
+      </div>
     </div>
   </div>
 

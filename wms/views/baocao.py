@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from ..decorators import admin_required
 from ..models import DanhMuc, NhatKyKho, SanPham
 from ..services import audit
 from .common import excel_response, paginate, to_date
@@ -39,10 +40,11 @@ def tinh_nxt(tu, den, sp_qs):
     data = {s.pk: {"sp": s, "dau": Decimal(0), "nhap": Decimal(0), "xuat": Decimal(0), "kiem": Decimal(0),
                    "cuoi": None, "co_gd": False} for s in sps}
     # Tồn đầu kỳ = sl_sau của bút toán cuối cùng trước kỳ
-    for log in (NhatKyKho.objects.filter(id_sp_id__in=ids, ngay_tao__lt=start)
+    bien_dong = NhatKyKho.objects.filter(loai_giao_dich__in=NhatKyKho.LOAI_BIEN_DONG)  # bỏ qua SUA_HAN_LO
+    for log in (bien_dong.filter(id_sp_id__in=ids, ngay_tao__lt=start)
                 .order_by("id_sp_id", "ngay_tao", "id_nhat_ky").only("id_sp_id", "sl_sau")):
         data[log.id_sp_id]["dau"] = log.sl_sau
-    for log in (NhatKyKho.objects.filter(id_sp_id__in=ids, ngay_tao__gte=start, ngay_tao__lt=end)
+    for log in (bien_dong.filter(id_sp_id__in=ids, ngay_tao__gte=start, ngay_tao__lt=end)
                 .order_by("ngay_tao", "id_nhat_ky").only("id_sp_id", "loai_giao_dich", "sl_thay_doi", "sl_sau")):
         row = data[log.id_sp_id]
         row["co_gd"] = True
@@ -85,7 +87,8 @@ def _tong(rows):
 def bao_cao(request):
     tu, den, rows, q, dm, sp = _filter(request)
     tab = request.GET.get("tab", "mat_hang")
-    logs = (NhatKyKho.objects.filter(ngay_tao__gte=_aware(tu), ngay_tao__lt=_aware(den, end=True))
+    logs = (NhatKyKho.objects.filter(loai_giao_dich__in=NhatKyKho.LOAI_BIEN_DONG,
+                                     ngay_tao__gte=_aware(tu), ngay_tao__lt=_aware(den, end=True))
             .select_related("id_sp", "nguoi_thuc_hien"))
     if dm:
         logs = logs.filter(Q(id_sp__id_danhmuc_id=dm) | Q(id_sp__id_danhmuc__id_dmcha_id=dm))
@@ -106,6 +109,7 @@ def bao_cao(request):
     })
 
 
+@admin_required
 def bao_cao_export(request):
     tu, den, rows, *_ = _filter(request)
     fmt = request.GET.get("format", "xlsx")

@@ -3,7 +3,7 @@
 {% block title %}Danh mục sản phẩm{% endblock %}
 {% block content %}
 {{ modal|json_script:"modal-data" }}
-<div x-data="crud({ ma_danhmuc: '{{ goi_y_ma }}', ten_danhmuc: '', id_dmcha: '', mo_ta: '', is_active: true })">
+<div x-data="crud({ ma_danhmuc: '{{ goi_y_ma }}', ten_danhmuc: '', id_dmcha: '', mo_ta: '', is_active: true, ngay_tao: '', ngay_cap_nhat: '' })">
   <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Danh mục sản phẩm</h1>
@@ -34,7 +34,7 @@
     </form>
     <div class="overflow-x-auto">
       <table class="tbl">
-        <thead><tr><th>Mã danh mục</th><th>Tên danh mục</th><th>Danh mục cha</th><th>Mô tả</th><th class="text-center">Số lượng sản phẩm<br>thuộc danh mục</th><th>Trạng thái</th>{% if user.is_admin %}<th class="text-right">Thao tác</th>{% endif %}</tr></thead>
+        <thead><tr><th>Mã danh mục</th><th>Tên danh mục</th><th>Danh mục cha</th><th>Mô tả</th><th class="text-center">Số lượng sản phẩm<br>thuộc danh mục</th><th>Ngày tạo</th><th>Cập nhật mới nhất</th><th>Trạng thái</th>{% if user.is_admin %}<th class="text-right">Thao tác</th>{% endif %}</tr></thead>
         <tbody>
         {% for d in page %}
         <tr>
@@ -43,29 +43,33 @@
           <td class="text-gray-500">{{ d.id_dmcha.ten_danhmuc|default:"—" }}</td>
           <td class="max-w-xs truncate text-gray-500">{{ d.mo_ta|default:"—" }}</td>
           <td class="text-center font-medium"><a href="/san-pham/?dm={{ d.pk }}" class="hover:text-brand-700">{{ d.so_sp }}</a></td>
+          <td class="whitespace-nowrap text-gray-500">{{ d.ngay_tao|dt }}</td>
+          <td class="whitespace-nowrap text-gray-500">{{ d.ngay_cap_nhat|dt }}</td>
           <td>{% dot_badge d.is_active %}</td>
           {% if user.is_admin %}
           <td class="text-right">
             <div class="flex items-center justify-end gap-3">
               <button class="inline-flex items-center gap-1 text-[12px] font-medium text-gray-700 hover:text-brand-700"
-                      @click="edit({pk:'{{ d.pk }}', ma_danhmuc:'{{ d.ma_danhmuc|escapejs }}', ten_danhmuc:'{{ d.ten_danhmuc|escapejs }}', id_dmcha:'{{ d.id_dmcha_id|default_if_none:'' }}', mo_ta:'{{ d.mo_ta|escapejs }}', is_active:{{ d.is_active|yesno:'true,false' }} })">
+                      @click="edit({pk:'{{ d.pk }}', ma_danhmuc:'{{ d.ma_danhmuc|escapejs }}', ten_danhmuc:'{{ d.ten_danhmuc|escapejs }}', id_dmcha:'{{ d.id_dmcha_id|default_if_none:'' }}', mo_ta:'{{ d.mo_ta|escapejs }}', is_active:{{ d.is_active|yesno:'true,false' }}, ngay_tao:'{{ d.ngay_tao|dt }}', ngay_cap_nhat:'{{ d.ngay_cap_nhat|dt }}' })">
                 <i data-lucide="square-pen" class="h-3.5 w-3.5"></i>Sửa</button>
-              {% if d.so_sp == 0 and d.so_con == 0 %}
-              <form method="post" action="{% url 'danh_muc_delete' d.pk %}" onsubmit="return confirm('Xóa danh mục “{{ d.ten_danhmuc|escapejs }}”?')">{% csrf_token %}
+              {% if d.so_sp == 0 and d.so_con == 0 or not d.is_active %}
+              <form method="post" action="{% url 'danh_muc_delete' d.pk %}" onsubmit="return confirm('Xóa danh mục “{{ d.ten_danhmuc|escapejs }}”?{% if d.so_sp or d.so_con %}
+
+{% if d.so_sp %}{{ d.so_sp }} sản phẩm sẽ được chuyển sang {% if d.id_dmcha %}danh mục cha “{{ d.id_dmcha.ten_danhmuc|escapejs }}”{% else %}“Chưa phân loại”{% endif %}. {% endif %}{% if d.so_con %}{{ d.so_con }} danh mục con sẽ được chuyển lên {% if d.id_dmcha %}“{{ d.id_dmcha.ten_danhmuc|escapejs }}”{% else %}cấp gốc{% endif %}.{% endif %}{% endif %}')">{% csrf_token %}
                 <button class="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-[12px] font-medium text-red-600 hover:bg-red-100"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Xóa</button>
               </form>
               {% else %}
-              <span class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-300" title="Không thể xóa: còn sản phẩm hoặc danh mục con"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Xóa</span>
+              <span class="inline-flex cursor-not-allowed items-center gap-1 rounded-md px-2 py-1 text-[12px] text-gray-300" title="Danh mục đang hoạt động và còn sản phẩm / danh mục con — chuyển sang Ngừng hoạt động để xóa"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Xóa</span>
               {% endif %}
             </div>
           </td>
           {% endif %}
         </tr>
-        {% empty %}<tr><td colspan="7" class="py-10 text-center text-gray-400">Không có danh mục phù hợp.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="9" class="py-10 text-center text-gray-400">Không có danh mục phù hợp.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>
-    <div class="flex items-center gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Không cho phép xóa danh mục nếu vẫn còn sản phẩm hoặc danh mục con thuộc danh mục đó.</div>
+    <div class="flex items-center gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Danh mục đang hoạt động chỉ xóa được khi trống. Danh mục đã ngừng hoạt động luôn xóa được: sản phẩm chuyển sang danh mục cha (hoặc “Chưa phân loại”), danh mục con chuyển lên cấp trên.</div>
     {% include "partials/pagination.html" with unit="danh mục" %}
   </div>
 
@@ -100,6 +104,14 @@
         <div class="sm:col-span-2">
           <label class="label">Mô tả</label>
           <textarea name="mo_ta" x-model="f.mo_ta" rows="2" class="input" placeholder="Mô tả ngắn về nhóm hàng"></textarea>
+        </div>
+        <div>
+          <label class="label">Ngày tạo</label>
+          <input class="input" :value="pk ? f.ngay_tao : 'Tự động ghi khi lưu'" readonly>
+        </div>
+        <div>
+          <label class="label">Ngày cập nhật mới nhất</label>
+          <input class="input" :value="pk ? f.ngay_cap_nhat : 'Tự động ghi khi lưu'" readonly>
         </div>
         <label class="flex items-center gap-2 sm:col-span-2" x-show="pk">
           <input type="checkbox" name="is_active" x-model="f.is_active" class="rounded border-gray-300 text-brand-700 focus:ring-brand-500"> Đang hoạt động

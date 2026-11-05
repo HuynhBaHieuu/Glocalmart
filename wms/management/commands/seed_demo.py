@@ -161,8 +161,11 @@ class Command(BaseCommand):
                             thuc, ly_do = sl + diff[m][0], diff[m][1]
                         dong[ct.pk] = {"sl": D(thuc), "ly_do": ly_do,
                                        "hsd": (t + timedelta(days=hsd)).date() if hsd is not None else None}
+                    # dữ liệu mô phỏng quá khứ: lúc nhận hàng, lô chưa cận hạn như tính theo hôm nay
                     xac_nhan_phieu_nhap(p.pk, dong, user, "Hàng giao đủ, bao bì nguyên vẹn." if not diff else
-                                        "Có chênh lệch khi kiểm đếm, đã ghi nhận lý do.")
+                                        "Có chênh lệch khi kiểm đếm, đã ghi nhận lý do.",
+                                        ly_do_can_han="Hạn còn dài tại thời điểm nhận hàng (dữ liệu demo)")
+                    ChiTietPhieuNhap.objects.filter(ma_phieu_nhap=p).update(ghi_chu_doi_soat=None)
                     t2 = t + timedelta(hours=2)
                     PhieuNhap.objects.filter(pk=p.pk).update(ngay_xac_nhan=t2, ngay_cap_nhat_giao=t2)
                     backdate(p, t2, "ma_phieu_nhap")
@@ -209,10 +212,8 @@ class Command(BaseCommand):
                 lines = []
                 for m in rnd.sample(ban_chay, rnd.randint(3, 5)):
                     sps[m].refresh_from_db()
-                    if sps[m].da_het_han:
-                        continue
                     nhieu = sps[m].don_vi in ("Lon", "Gói", "Chai")
-                    sl = min(int(sps[m].ton_kho), rnd.randint(8, 40) if nhieu else rnd.randint(3, 12))
+                    sl = min(int(sps[m].ton_con_han), rnd.randint(8, 40) if nhieu else rnd.randint(3, 12))
                     if sl > 0:
                         lines.append((m, sl))
                 if lines:
@@ -239,7 +240,7 @@ class Command(BaseCommand):
             def ban_het(day, m, giu=0):
                 sps[m].refresh_from_db()
                 if sps[m].ton_kho > giu:
-                    ly = PhieuXuat.HUY_HANG if sps[m].da_het_han else PhieuXuat.BAN_HANG
+                    ly = PhieuXuat.HUY_HANG if sps[m].ton_con_han < sps[m].ton_kho - giu else PhieuXuat.BAN_HANG
                     xuat(day, ly, [(m, sps[m].ton_kho - giu)], rnd.choice(staff),
                          ghi_chu="Hủy hàng hết hạn" if ly == PhieuXuat.HUY_HANG else "Bán sỉ cho khách đoàn")
 
@@ -278,7 +279,8 @@ class Command(BaseCommand):
                                             ma_doi_tuong=p.pk, ngay_tao=t + timedelta(minutes=30))
                 if gui:
                     p.refresh_from_db()
-                    gui_duyet(p)
+                    gui_duyet(p, {ct.pk: ct.id_sp.han_su_dung for ct in p.chi_tiet.select_related("id_sp")
+                                  if ct.sl_thua > 0})
                     PhieuKiemKe.objects.filter(pk=p.pk).update(ngay_gui_duyet=t + timedelta(minutes=45))
                     AuditLog.objects.create(nguoi_dung=user, hanh_dong="GUI_DUYET", doi_tuong="phieu_kiem_ke",
                                             ma_doi_tuong=p.pk, ngay_tao=t + timedelta(minutes=45))
@@ -323,6 +325,12 @@ class Command(BaseCommand):
             xuat(0, PhieuXuat.HUY_HANG, [("SP-0018", 6)], staff[2], confirm=False, ghi_chu="Hủy snack quá hạn sử dụng")
 
             raw = tao_api_key("Ứng dụng POS quầy cafe (demo)", admin)
+
+            # mọi nghiệp vụ đã trừ / cộng theo lô (FEFO) → tổng lô phải khớp tồn kho
+            from wms.services import kiem_tra_tong_lo
+            lech = kiem_tra_tong_lo()
+            if lech:
+                raise RuntimeError(f"Tổng lô lệch tồn kho: {lech[:5]}")
 
         sp_count = SanPham.objects.count()
         self.stdout.write(self.style.SUCCESS(

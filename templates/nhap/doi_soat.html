@@ -2,6 +2,8 @@
 {% load wms_tags %}
 {% block title %}Đối soát {{ p.pk }}{% endblock %}
 {% block content %}
+{{ rows|json_script:"rows-data" }}
+{{ ly_do_can_han|json_script:"ldch-data" }}
 <form method="post" x-data="doiSoat()" class="contents">
 {% csrf_token %}
 <nav class="mb-1 text-[11.5px] text-gray-400">Nhập kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">{{ p.pk }}</span></nav>
@@ -30,36 +32,64 @@
     </div>
 
     <div class="card overflow-hidden">
-      <div class="card-head"><i data-lucide="clipboard-check" class="h-4 w-4"></i>Kiểm tra, Đối soát &amp; Cập nhật Tồn kho <span class="ml-auto rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px]">{{ chi_tiet|length }} sản phẩm</span></div>
+      <div class="card-head"><i data-lucide="clipboard-check" class="h-4 w-4"></i>Kiểm tra, Đối soát &amp; Cập nhật Tồn kho <span class="ml-auto rounded-full bg-emerald-400/20 px-2 py-0.5 text-[11px]" x-text="rows.length + ' lô'"></span></div>
       <div class="overflow-x-auto">
         <table class="tbl compact">
-          <thead><tr><th>#</th><th>Tên sản phẩm / Mã SKU</th><th>ĐVT</th><th class="text-right">SL đặt</th><th class="text-center">SL thực nhận</th><th class="text-center">Chênh lệch</th><th>Lý do chênh lệch</th><th>Hạn sử dụng</th><th class="text-right">Thành tiền</th></tr></thead>
+          <thead><tr><th>#</th><th>Tên sản phẩm / Mã SKU</th><th>ĐVT</th><th class="text-right">SL đặt</th><th class="text-center">SL thực nhận</th><th class="text-center">Chênh lệch</th><th>Lý do chênh lệch</th><th>Hạn sử dụng</th><th class="text-right">Thành tiền</th><th class="w-8"></th></tr></thead>
           <tbody>
           <template x-for="(r, i) in rows" :key="r.id">
-            <tr :class="r.sl !== '' && Number(r.sl) !== r.dat ? 'bg-red-50/40' : ''">
+            <tr :class="[canhBao(r) && 'bg-amber-50/60', laGoc(r) && diffNhom(r) !== 0 && daNhap(r) ? 'bg-red-50/40' : '']">
               <td class="text-gray-400" x-text="i + 1"></td>
-              <td class="min-w-[170px]"><p class="font-medium" x-text="r.ten"></p><p class="text-[11px] text-gray-400" x-text="'SKU: ' + r.ma"></p><p class="text-[11px] text-gray-400" x-text="'Đơn giá: ' + vn(r.gia,0) + ' đ / ' + r.dvt"></p></td>
+              <td class="min-w-[170px]">
+                <p class="font-medium" x-text="r.ten"></p><p class="text-[11px] text-gray-400" x-text="'SKU: ' + r.ma"></p>
+                <p x-show="r.tach" class="mt-0.5 inline-block rounded bg-blue-50 px-1.5 text-[10.5px] font-medium text-blue-700">Lô thêm — cùng SP, khác hạn</p>
+                <p x-show="!r.tach" class="text-[11px] text-gray-400" x-text="'Đơn giá: ' + vn(r.gia,0) + ' đ / ' + r.dvt"></p>
+              </td>
               <td x-text="r.dvt"></td>
-              <td class="text-right font-semibold" x-text="vn(r.dat)"></td>
-              <td><input type="number" min="0" step="any" :name="'sl_' + r.id" x-model="r.sl" class="input !w-20 !px-2 text-center font-semibold"
-                     :class="r.sl === '' ? '' : (Number(r.sl) === r.dat ? '!border-emerald-500 !bg-emerald-50 text-emerald-800' : '!border-red-400 !bg-red-50 text-red-700')"></td>
-              <td class="text-center"><span class="rounded px-1.5 py-0.5 text-[11.5px] font-semibold" x-show="r.sl !== ''"
-                     :class="diff(r) === 0 ? 'bg-emerald-50 text-emerald-700' : (diff(r) < 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600')" x-text="(diff(r) > 0 ? '+' : '') + vn(diff(r))"></span></td>
+              <td class="text-right font-semibold" x-text="r.tach ? '—' : vn(r.dat)"></td>
               <td>
-                <select :name="'ly_do_' + r.id" x-model="r.ly_do" class="input !w-[112px] !py-1.5 !pl-2 text-[12px]" :disabled="r.sl === '' || diff(r) === 0"
-                        :class="r.sl !== '' && diff(r) !== 0 && !r.ly_do ? '!border-red-400' : ''">
+                <template x-if="!isNew(r)"><input type="number" min="0" step="any" :name="'sl_' + r.id" x-model="r.sl" class="input !w-20 !px-2 text-center font-semibold"></template>
+                <template x-if="isNew(r)"><span><input type="hidden" name="moi_goc" :value="r.goc"><input type="number" min="0" step="any" name="moi_sl" x-model="r.sl" class="input !w-20 !px-2 text-center font-semibold"></span></template>
+              </td>
+              <td class="text-center">
+                <span class="rounded px-1.5 py-0.5 text-[11.5px] font-semibold" x-show="laGoc(r) && daNhap(r)"
+                      :class="diffNhom(r) === 0 ? 'bg-emerald-50 text-emerald-700' : (diffNhom(r) < 0 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600')"
+                      x-text="(diffNhom(r) > 0 ? '+' : '') + vn(diffNhom(r))" :title="soLo(r) > 1 ? 'Tính trên tổng ' + soLo(r) + ' lô của sản phẩm' : ''"></span>
+                <span x-show="!laGoc(r)" class="text-[11px] text-gray-400">tính ở dòng gốc</span>
+              </td>
+              <td>
+                <select x-show="laGoc(r)" :name="'ly_do_' + r.id" x-model="r.ly_do" class="input !w-[112px] !py-1.5 !pl-2 text-[12px]" :disabled="!daNhap(r) || diffNhom(r) === 0"
+                        :class="daNhap(r) && diffNhom(r) !== 0 && !r.ly_do ? '!border-red-400' : ''">
                   <option value="">—</option>
                   {% for code, label in ly_do %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
                 </select>
               </td>
-              <td><input type="date" :name="'hsd_' + r.id" x-model="r.hsd" class="input !w-[132px] !px-2 !py-1.5 text-[12px]"></td>
-              <td class="whitespace-nowrap text-right"><p class="font-semibold" x-text="vn((Number(r.sl) || 0) * r.gia, 0) + ' đ'"></p><p class="text-[11px] text-red-500" x-show="r.sl !== '' && diff(r) < 0" x-text="'Đã trừ ' + vn(-diff(r) * r.gia, 0) + ' đ'"></p></td>
+              <td>
+                <input type="date" :name="isNew(r) ? 'moi_hsd' : 'hsd_' + r.id" x-model="r.hsd" class="input !w-[132px] !px-2 !py-1.5 text-[12px]" :class="canhBao(r) && '!border-amber-400 !bg-amber-50'">
+                <p class="mt-0.5 text-[10.5px] font-medium" :class="conNgay(r) < 0 ? 'text-red-600' : 'text-amber-700'" x-show="canhBao(r)" x-text="canhBao(r)"></p>
+                <p class="mt-0.5 text-[10.5px] text-gray-400" x-show="!r.hsd">Trống = không có HSD</p>
+              </td>
+              <td class="whitespace-nowrap text-right"><p class="font-semibold" x-text="vn((Number(r.sl) || 0) * r.gia, 0) + ' đ'"></p></td>
+              <td class="whitespace-nowrap">
+                <button type="button" x-show="!r.tach" @click="tach(r, i)" class="text-[11px] font-medium text-brand-700 hover:underline" title="Hàng giao về có hạn khác: thêm 1 lô cho cùng sản phẩm">+ Lô</button>
+                <button type="button" x-show="r.tach" @click="rows.splice(i, 1)" class="text-red-500 hover:text-red-700" title="Bỏ lô này">✕</button>
+              </td>
             </tr>
           </template>
           </tbody>
         </table>
       </div>
-      <p class="flex items-center gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="h-3.5 w-3.5"></i>Lý do chênh lệch bắt buộc khi SL thực nhận ≠ SL đặt. Tùy chọn: Thiếu hàng / Hư hỏng / Giao nhầm. Hạn sử dụng của lô giúp hệ thống cảnh báo hết hạn.</p>
+      <p class="flex items-start gap-2 border-t px-5 py-2.5 text-[11.5px] text-gray-500"><i data-lucide="info" class="mt-0.5 h-3.5 w-3.5 shrink-0"></i><span>Mỗi dòng sau khi xác nhận là 1 <b>lô</b>. Nhập hạn sử dụng theo hạn in trên bao bì (để trống nếu sản phẩm không có hạn). Cùng sản phẩm mà giao về 2 hạn khác nhau → bấm <b>“+ Lô”</b> để thêm dòng, mỗi dòng một số lượng và một hạn. Lý do chênh lệch bắt buộc khi tổng SL thực nhận của sản phẩm ≠ SL đặt.</span></p>
+    </div>
+
+    <div x-show="dsCanhBao().length" x-cloak class="card border-amber-300 bg-amber-50/70 p-5">
+      <p class="flex items-center gap-2 text-[14px] font-semibold text-amber-800"><i data-lucide="triangle-alert" class="h-4 w-4"></i>Lô hàng cận hạn / đã hết hạn</p>
+      <ul class="mt-2 list-disc space-y-0.5 pl-5 text-[12.5px] text-amber-900">
+        <template x-for="r in dsCanhBao()" :key="r.id"><li><b x-text="r.ten"></b> — HSD <span x-text="r.hsd.split('-').reverse().join('/')"></span> (<span x-text="canhBao(r)"></span>)</li></template>
+      </ul>
+      <label class="label mt-3">Xác nhận lại: lý do vẫn nhận các lô này <span class="text-red-500">*</span></label>
+      <textarea name="ly_do_can_han" x-model="ly_do_can_han" rows="2" class="input" placeholder="VD: NCC giảm giá 30%, bán khuyến mãi trong tuần / Kiểm tra lại bao bì, hạn đúng"></textarea>
+      <p class="hint">Không chặn lưu bản nháp. Lý do được ghi vào ghi chú đối soát của từng lô khi chốt phiếu.</p>
     </div>
 
     <div class="card p-5">
@@ -71,14 +101,14 @@
       <button name="action" value="luu_nhap" class="btn btn-outline"><i data-lucide="save"></i>Lưu bản nháp đối soát</button>
       <span class="text-[11.5px] text-gray-500">Bản nháp đối soát được lưu vào phiếu, chưa cộng tồn kho.</span>
       <button name="action" value="xac_nhan" class="btn btn-primary ml-auto" :disabled="!ready"
-              onclick="return confirm('Chốt phiếu Đã giao và tự động cộng tồn kho? Sau khi xác nhận phiếu sẽ bị khóa.')">
+              onclick="return confirm('Chốt phiếu Đã giao và tự động cộng tồn kho? Sau khi xác nhận, phiếu và hạn sử dụng trên phiếu sẽ bị khóa.')">
         <i data-lucide="square-check"></i>Đã giao &amp; Tự động Cập nhật tồn kho</button>
     </div>
     <div class="text-[11.5px] leading-relaxed text-gray-500">
       Khi bấm “Đã giao &amp; Tự động Cập nhật tồn kho”, hệ thống sẽ:<br>
       — Chuyển trạng thái phiếu sang Đã giao / Đã xác nhận.<br>
-      — Tự động cộng đúng số lượng thực nhận vào tồn kho, tính lại giá vốn bình quân và cập nhật hạn sử dụng sớm nhất.<br>
-      — Khóa phiếu để tránh chỉnh sửa sau khi đã xác nhận.
+      — Mỗi dòng thành 1 lô: cộng số lượng thực nhận vào tồn kho, tính lại giá vốn bình quân, cập nhật hạn sử dụng sớm nhất của sản phẩm.<br>
+      — Khóa phiếu. Nếu nhập sai hạn, dùng chức năng “Sửa hạn lô” ở trang chi tiết phiếu (bắt buộc lý do).
     </div>
   </div>
 
@@ -86,7 +116,7 @@
     <div class="card overflow-hidden">
       <div class="card-head"><i data-lucide="calculator" class="h-4 w-4"></i>Tóm tắt đối soát</div>
       <div class="space-y-2.5 p-5 text-[12.5px]">
-        <div class="flex justify-between"><span class="text-gray-500">Tổng sản phẩm</span><b x-text="rows.length + ' SKU'"></b></div>
+        <div class="flex justify-between"><span class="text-gray-500">Tổng sản phẩm / lô</span><b x-text="new Set(rows.map(r => r.sp)).size + ' SKU · ' + rows.length + ' lô'"></b></div>
         <hr>
         <div class="flex justify-between"><span class="text-gray-500">Tổng SL đặt hàng</span><b x-text="vn(sum('dat'))"></b></div>
         <div class="flex justify-between"><span class="text-gray-500">Tổng SL thực nhận</span><b x-text="vn(sumSl())"></b></div>
@@ -100,7 +130,7 @@
         <hr>
         <div class="flex justify-between"><span class="text-gray-500">Tổng giá trị thực tế</span><b class="text-[15px] text-brand-800" x-text="vnd(total())"></b></div>
         <p class="text-[11px] text-gray-400">Giá trị ban đầu: <span x-text="vnd(rows.reduce((s,r)=>s+r.dat*r.gia,0))"></span></p>
-        <p x-show="!ready" class="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700">Nhập đủ SL thực nhận và chọn lý do cho các dòng chênh lệch để chốt phiếu.</p>
+        <p x-show="!ready" class="rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-700" x-text="dsCanhBao().length && !ly_do_can_han.trim() ? 'Có lô cận hạn/đã hết hạn — nhập lý do xác nhận lại để chốt phiếu.' : 'Nhập đủ SL thực nhận (lô thêm phải > 0) và chọn lý do cho các sản phẩm chênh lệch để chốt phiếu.'"></p>
       </div>
     </div>
     <div class="card overflow-hidden">
@@ -115,19 +145,37 @@
   </div>
 </div>
 </form>
-<script type="application/json" id="rows-data2">[{% for ct in chi_tiet %}{"id":{{ ct.pk }},"ten":"{{ ct.id_sp.ten_sp|escapejs }}","ma":"{{ ct.id_sp.ma_sp|escapejs }}","dvt":"{{ ct.id_sp.don_vi|escapejs }}","dat":{{ ct.so_luong_dat|num }},"gia":{{ ct.don_gia_nhap|num }},"sl":"{{ ct.so_luong_thuc_nhan|num }}","hsd":"{{ ct.han_su_dung|iso }}","ly_do":"{{ ct.ly_do_chenh_lech|default:'' }}"}{% if not forloop.last %},{% endif %}{% endfor %}]</script>
 {% endblock %}
 {% block scripts %}
 <script>
 function doiSoat() {
+  const HOM_NAY = new Date('{{ today }}T00:00:00');
+  let dem = 0;
   return {
-    rows: jsonData('rows-data2'),
-    diff(r) { return (Number(r.sl) || 0) - r.dat; },
+    rows: jsonData('rows-data'),
+    ly_do_can_han: jsonData('ldch-data') || '',
+    isNew(r) { return typeof r.id === 'string'; },
+    nhom(r) { return this.rows.filter(x => x.sp === r.sp); },
+    soLo(r) { return this.nhom(r).length; },
+    laGoc(r) { return !r.tach || !this.nhom(r).some(x => !x.tach); },
+    daNhap(r) { return this.nhom(r).every(x => x.sl !== ''); },
+    diffNhom(r) { const n = this.nhom(r); return n.reduce((s, x) => s + (Number(x.sl) || 0), 0) - n.reduce((s, x) => s + x.dat, 0); },
+    conNgay(r) { return r.hsd ? Math.round((new Date(r.hsd + 'T00:00:00') - HOM_NAY) / 864e5) : null; },
+    canhBao(r) { const d = this.conNgay(r); if (d === null) return ''; return d < 0 ? 'Đã hết hạn' : (d <= r.canh_bao ? 'Cận hạn — còn ' + d + ' ngày' : ''); },
+    dsCanhBao() { return this.rows.filter(r => this.canhBao(r)); },
+    tach(r, i) {
+      this.rows.splice(i + 1 + this.nhom(r).filter(x => x.tach).length, 0,
+        { ...r, id: 'tach' + (++dem), goc: r.id, dat: 0, tach: true, sl: '', hsd: '', ly_do: '' });
+    },
     sum(k) { return this.rows.reduce((s, r) => s + Number(r[k] || 0), 0); },
     sumSl() { return this.rows.reduce((s, r) => s + (Number(r.sl) || 0), 0); },
-    byReason(code) { return this.rows.filter(r => r.ly_do === code && r.sl !== '').reduce((s, r) => s + this.diff(r), 0); },
+    byReason(code) { return this.rows.filter(r => this.laGoc(r) && r.ly_do === code && this.daNhap(r)).reduce((s, r) => s + this.diffNhom(r), 0); },
     total() { return this.rows.reduce((s, r) => s + (Number(r.sl) || 0) * r.gia, 0); },
-    get ready() { return this.rows.every(r => r.sl !== '' && Number(r.sl) >= 0 && (this.diff(r) === 0 || r.ly_do)); },
+    get ready() {
+      return this.rows.every(r => r.sl !== '' && Number(r.sl) >= 0 && (!r.tach || Number(r.sl) > 0)
+                                  && (!this.laGoc(r) || this.diffNhom(r) === 0 || r.ly_do))
+        && (!this.dsCanhBao().length || this.ly_do_can_han.trim());
+    },
   };
 }
 </script>

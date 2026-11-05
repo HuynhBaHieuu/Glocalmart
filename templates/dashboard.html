@@ -4,7 +4,7 @@
 {% block content %}
 <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
   <div>
-    <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Dashboard Cảnh báo Tồn kho Tối thiểu</h1>
+    <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Dashboard Cảnh báo</h1>
     <p class="mt-1 text-[13px] text-gray-500">Theo dõi danh sách sản phẩm vi phạm ngưỡng tồn tối thiểu và hạn sử dụng để chủ động kế hoạch nhập hàng.</p>
   </div>
   <a href="/" class="btn btn-primary"><i data-lucide="refresh-cw"></i>Quét dữ liệu / Làm mới</a>
@@ -22,29 +22,15 @@
     <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ sap|stringformat:"02d" }}</p>
     <p class="text-[12px] text-gray-500">Đã chạm ngưỡng tồn tối thiểu.</p>
   </a>
-</div>
-
-<!-- Thẻ phụ -->
-<div class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-5">
-  <a href="?tab=het_han" class="stat flex items-center gap-3 hover:shadow-sm">
-    <span class="stat-icon !bg-red-50 !text-red-600"><i data-lucide="calendar-x" class="h-4 w-4"></i></span>
-    <span><span class="block text-[11.5px] text-gray-500">Đã hết hạn</span><span class="text-xl font-semibold">{{ het_han }}</span></span>
+  <a href="?tab=het_han" class="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 transition hover:shadow-md">
+    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-rose-700"><span class="h-2.5 w-2.5 rounded-full bg-rose-700"></span>Đã hết hạn sử dụng</p>
+    <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ het_han|stringformat:"02d" }}</p>
+    <p class="text-[12px] text-gray-500">Lô còn hàng đã quá hạn — cần lập phiếu xuất hủy.</p>
   </a>
-  <a href="?tab=sap_het_han" class="stat flex items-center gap-3 hover:shadow-sm">
-    <span class="stat-icon !bg-amber-50 !text-amber-600"><i data-lucide="calendar-clock" class="h-4 w-4"></i></span>
-    <span><span class="block text-[11.5px] text-gray-500">Sắp hết hạn</span><span class="text-xl font-semibold">{{ sap_het_han }}</span></span>
-  </a>
-  <a href="/nhap-kho/" class="stat flex items-center gap-3 hover:shadow-sm">
-    <span class="stat-icon"><i data-lucide="truck" class="h-4 w-4"></i></span>
-    <span><span class="block text-[11.5px] text-gray-500">Phiếu nhập chưa chốt</span><span class="text-xl font-semibold">{{ stats.cho_giao }}</span></span>
-  </a>
-  <a href="/xuat-kho/?tt=CHUA_XAC_NHAN" class="stat flex items-center gap-3 hover:shadow-sm">
-    <span class="stat-icon"><i data-lucide="arrow-up-right" class="h-4 w-4"></i></span>
-    <span><span class="block text-[11.5px] text-gray-500">Phiếu xuất chờ xác nhận</span><span class="text-xl font-semibold">{{ stats.xuat_cho }}</span></span>
-  </a>
-  <a href="/kiem-ke/?tt=CHO_DUYET" class="stat col-span-2 flex items-center gap-3 hover:shadow-sm lg:col-span-1">
-    <span class="stat-icon"><i data-lucide="clipboard-check" class="h-4 w-4"></i></span>
-    <span><span class="block text-[11.5px] text-gray-500">Kiểm kê chờ duyệt</span><span class="text-xl font-semibold">{{ stats.kiem_cho }}</span></span>
+  <a href="?tab=sap_het_han" class="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 transition hover:shadow-md">
+    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Sắp hết hạn sử dụng</p>
+    <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ sap_het_han|stringformat:"02d" }}</p>
+    <p class="text-[12px] text-gray-500">Lô còn ≤ số ngày cảnh báo của sản phẩm — ưu tiên xuất trước.</p>
   </a>
 </div>
 
@@ -67,6 +53,19 @@
         <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Đã hết hàng<span class="ml-auto font-semibold">{{ het }} ({{ pct.het }}%)</span></li>
         <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-orange-600"></span>Sắp hết hàng<span class="ml-auto font-semibold">{{ sap }} ({{ pct.sap }}%)</span></li>
         <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>An toàn<span class="ml-auto font-semibold">{{ an_toan }} ({{ pct.an_toan }}%)</span></li>
+      </ul>
+    </div>
+    <div class="card p-5">
+      <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="calendar-clock" class="h-4 w-4"></i>Biểu đồ Cảnh báo Hạn sử dụng</h3>
+      <div class="relative mx-auto my-6 h-48 w-48 rounded-full" style="background: {{ han.donut }}">
+        <div class="absolute inset-[22px] grid place-items-center rounded-full bg-white text-center">
+          <div><p class="text-[30px] font-semibold leading-none text-gray-900">{{ han.tong }}</p><p class="mt-1 text-[11.5px] text-gray-500">Lô còn hàng có HSD</p></div>
+        </div>
+      </div>
+      <ul class="space-y-2 text-[12.5px]">
+        <li><a href="?tab=het_han" class="flex items-center gap-2 hover:text-brand-700"><span class="h-2.5 w-2.5 rounded-full bg-rose-700"></span>Đã hết hạn<span class="ml-auto font-semibold">{{ het_han }} ({{ han.pct.het_han }}%)</span></a></li>
+        <li><a href="?tab=sap_het_han" class="flex items-center gap-2 hover:text-brand-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Sắp hết hạn<span class="ml-auto font-semibold">{{ sap_het_han }} ({{ han.pct.sap_het_han }}%)</span></a></li>
+        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>Còn hạn<span class="ml-auto font-semibold">{{ han.con_han }} ({{ han.pct.con_han }}%)</span></li>
       </ul>
     </div>
     <div class="card">
@@ -110,14 +109,43 @@
         <option value="">Tất cả danh mục</option>
         {% for d in danh_muc %}<option value="{{ d.pk }}" {% if dm == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.ten_danhmuc }}</option>{% endfor %}
       </select>
+      {% if user.is_admin %}
+      <a href="{% url 'dashboard_export' %}{% qs page=None per=None %}" class="btn btn-outline" title="Xuất Excel danh sách đang xem"><i data-lucide="file-down"></i>Xuất báo cáo</a>
+      {% endif %}
     </form>
     <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
       <i data-lucide="pin" class="h-3.5 w-3.5 text-red-500"></i><b class="text-brand-800">Quy tắc cảnh báo</b>
-      Hệ thống tự động lọc sản phẩm có Số lượng tồn ≤ Ngưỡng tồn tối thiểu hoặc sắp/đã hết hạn sử dụng (theo số ngày cảnh báo).
+      {% if theo_lo %}Xét từng lô còn hàng có hạn sử dụng: quá hạn → Đã hết hạn; còn ≤ số ngày cảnh báo của sản phẩm → Sắp hết hạn. Sắp xếp theo hạn tăng dần.{% else %}Tồn = 0 → Đã hết hàng; Tồn ≤ Ngưỡng tối thiểu → Sắp hết hàng; kèm sản phẩm có lô sắp/đã hết hạn (theo số ngày cảnh báo).{% endif %}
     </div>
     <div class="overflow-x-auto">
       <table class="tbl compact">
-        <thead><tr><th>Mã SP</th><th>Tên SP</th><th class="text-right">SL tồn</th><th class="text-right">Ngưỡng tối thiểu</th><th>Hạn sử dụng</th><th>Trạng thái cảnh báo</th><th>Thao tác</th></tr></thead>
+      {% if theo_lo %}
+        <thead><tr><th>Mã SP</th><th>Tên SP</th><th>Lô (mã phiếu nhập)</th><th class="text-right">SL còn của lô</th><th class="text-right">Tổng tồn</th><th>Hạn sử dụng</th><th class="text-right">Còn lại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+        <tbody>
+        {% for lo in page %}
+          <tr>
+            <td class="text-gray-500">{{ lo.id_sp.ma_sp }}</td>
+            <td><a href="/san-pham/?xem={{ lo.id_sp_id }}" class="font-medium text-gray-900 hover:text-brand-700">{{ lo.id_sp.ten_sp }}</a><p class="text-[11px] text-gray-400">{{ lo.id_sp.id_danhmuc.ten_danhmuc }}</p></td>
+            <td><a href="{% url 'nhap_detail' lo.ma_phieu_nhap_id %}" class="font-medium text-brand-700 hover:underline">{{ lo.ma_phieu_nhap_id }}</a></td>
+            <td class="text-right font-semibold">{{ lo.so_luong_con_lai|qty }} <span class="font-normal text-gray-400">{{ lo.id_sp.don_vi }}</span></td>
+            <td class="text-right">{{ lo.id_sp.ton_kho|qty }}</td>
+            <td class="whitespace-nowrap">{{ lo.han_su_dung|d }}</td>
+            <td class="whitespace-nowrap text-right {% if lo.so_ngay_con_lai < 0 %}font-medium text-red-600{% else %}text-gray-600{% endif %}">{% if lo.so_ngay_con_lai < 0 %}Quá hạn {{ lo.so_ngay_con_lai|cut:"-" }} ngày{% else %}Còn {{ lo.so_ngay_con_lai }} ngày{% endif %}</td>
+            <td>{% badge lo.muc_han %}</td>
+            <td>
+              {% if lo.muc_han == 'DA_HET_HAN' %}
+                <a href="/xuat-kho/tao/?sp={{ lo.id_sp.pk }}&sl={{ lo.so_luong_con_lai|num }}&ly_do=HUY_HANG&ghi_chu=H%E1%BA%BFt%20h%E1%BA%A1n%20s%E1%BB%AD%20d%E1%BB%A5ng" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-red-600 hover:underline"><i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>Tạo phiếu xuất</a>
+              {% else %}
+                <a href="/xuat-kho/tao/?sp={{ lo.id_sp.pk }}&sl={{ lo.so_luong_con_lai|num }}&ghi_chu=S%E1%BA%AFp%20h%E1%BA%BFt%20h%E1%BA%A1n%20s%E1%BB%AD%20d%E1%BB%A5ng" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-amber-700 hover:underline"><i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>Tạo phiếu xuất</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9" class="py-12 text-center text-gray-400"><i data-lucide="shield-check" class="mx-auto mb-2 h-8 w-8 text-emerald-500"></i>Không có lô nào cần cảnh báo.</td></tr>
+        {% endfor %}
+        </tbody>
+      {% else %}
+        <thead><tr><th>Mã SP</th><th>Tên SP</th><th class="text-right">SL tồn</th><th class="text-right">Ngưỡng tối thiểu</th><th>Hạn sớm nhất</th><th>Trạng thái cảnh báo</th><th>Thao tác</th></tr></thead>
         <tbody>
         {% for s in page %}
           <tr>
@@ -128,20 +156,26 @@
             <td class="whitespace-nowrap">{% if s.han_su_dung %}{{ s.han_su_dung|d }}<p class="text-[11px] {% if s.so_ngay_con_lai < 0 %}text-red-500{% else %}text-gray-400{% endif %}">{% if s.so_ngay_con_lai < 0 %}Quá hạn {{ s.so_ngay_con_lai|cut:"-" }} ngày{% else %}Còn {{ s.so_ngay_con_lai }} ngày{% endif %}</p>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
             <td class="whitespace-nowrap"><div class="flex flex-wrap gap-1">{% for c in s.canh_bao %}{% badge c %}{% endfor %}</div></td>
             <td>
+              <div class="flex flex-col items-start gap-1">
               {% if 'DA_HET_HAN' in s.canh_bao %}
-                <a href="/xuat-kho/tao/?sp={{ s.pk }}&ly_do=HUY_HANG" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-red-600 hover:underline"><i data-lucide="trash-2" class="h-3.5 w-3.5"></i>Lập phiếu hủy</a>
-              {% else %}
+                <a href="/xuat-kho/tao/?sp={{ s.pk }}&sl={{ s.sl_han.DA_HET_HAN|num }}&ly_do=HUY_HANG&ghi_chu=H%E1%BA%BFt%20h%E1%BA%A1n%20s%E1%BB%AD%20d%E1%BB%A5ng" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-red-600 hover:underline"><i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>Tạo phiếu xuất</a>
+              {% elif 'SAP_HET_HAN' in s.canh_bao %}
+                <a href="/xuat-kho/tao/?sp={{ s.pk }}&sl={{ s.sl_han.SAP_HET_HAN|num }}&ghi_chu=S%E1%BA%AFp%20h%E1%BA%BFt%20h%E1%BA%A1n%20s%E1%BB%AD%20d%E1%BB%A5ng" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-amber-700 hover:underline"><i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>Tạo phiếu xuất</a>
+              {% endif %}
+              {% if 'HET_HANG' in s.canh_bao or 'SAP_HET' in s.canh_bao %}
                 <a href="/nhap-kho/tao/?sp={{ s.pk }}" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-brand-700 hover:underline"><i data-lucide="package-plus" class="h-3.5 w-3.5"></i>Tạo phiếu nhập</a>
               {% endif %}
+              </div>
             </td>
           </tr>
         {% empty %}
           <tr><td colspan="7" class="py-12 text-center text-gray-400"><i data-lucide="shield-check" class="mx-auto mb-2 h-8 w-8 text-emerald-500"></i>Không có sản phẩm nào cần cảnh báo.</td></tr>
         {% endfor %}
         </tbody>
+      {% endif %}
       </table>
     </div>
-    {% include "partials/pagination.html" with unit="sản phẩm" %}
+    {% if theo_lo %}{% include "partials/pagination.html" with unit="lô" %}{% else %}{% include "partials/pagination.html" with unit="sản phẩm" %}{% endif %}
     <div class="flex items-center gap-2 border-t bg-gray-50 px-5 py-2.5 text-[11px] text-gray-500">
       <i data-lucide="info" class="h-3.5 w-3.5"></i>Ngừng kinh doanh là xóa mềm: sản phẩm và lịch sử giao dịch được giữ lại, có thể khôi phục bất cứ lúc nào.
     </div>

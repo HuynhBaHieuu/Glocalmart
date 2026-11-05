@@ -6,6 +6,7 @@ urlpatterns = [
     path("login/", auth.login_view, name="login"),
     path("logout/", auth.logout_view, name="logout"),
     path("", dashboard.dashboard, name="dashboard"),
+    path("canh-bao/xuat-excel/", dashboard.dashboard_export, name="dashboard_export"),
 
     # danh mục
     path("danh-muc/", catalog.danh_muc_list, name="danh_muc"),
@@ -29,6 +30,7 @@ urlpatterns = [
     path("nhap-kho/", nhap.nhap_list, name="nhap"),
     path("nhap-kho/xuat-excel/", nhap.nhap_export, name="nhap_export"),
     path("nhap-kho/tao/", nhap.nhap_create, name="nhap_create"),
+    path("nhap-kho/lo/<int:pk>/sua-han/", nhap.nhap_sua_han_lo, name="nhap_sua_han_lo"),
     path("nhap-kho/<str:ma>/", nhap.nhap_detail, name="nhap_detail"),
     path("nhap-kho/<str:ma>/giao-hang/", nhap.nhap_giao_hang, name="nhap_giao_hang"),
     path("nhap-kho/<str:ma>/doi-soat/", nhap.nhap_doi_soat, name="nhap_doi_soat"),

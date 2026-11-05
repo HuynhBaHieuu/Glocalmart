@@ -120,11 +120,6 @@
           <label class="label" :class="e.mat_khau && '!text-red-600'">Mật khẩu <span class="text-red-500" x-show="!pk">*</span> <span class="err-text" x-text="e.mat_khau"></span></label>
           <input name="mat_khau" type="password" class="input" :class="e.mat_khau && 'err'" :placeholder="pk ? 'Để trống nếu không đổi' : 'Tối thiểu 6 ký tự'" autocomplete="new-password">
         </div>
-        <div class="rounded-xl bg-gray-50 p-3 text-[12px] text-gray-600 sm:col-span-2">
-          <b>Quyền hạn:</b>
-          <span x-show="f.vai_tro === 'NHAN_VIEN'">Lập phiếu nhập/xuất, đếm kiểm kê, xem cảnh báo &amp; báo cáo. <b>Không</b> có quyền xóa dữ liệu, quản lý danh mục, tài khoản hay duyệt kiểm kê.</span>
-          <span x-show="f.vai_tro === 'ADMIN'">Toàn bộ quyền của Nhân viên + quản lý tài khoản, danh mục, sản phẩm, nhà cung cấp, duyệt/từ chối kiểm kê và xóa bản ghi.</span>
-        </div>
       </div>
       <div class="flex items-center justify-between rounded-b-2xl border-t bg-gray-50 px-6 py-4">
         <span class="text-[11px] text-gray-400">* Thông tin bắt buộc</span>

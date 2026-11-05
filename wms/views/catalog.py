@@ -6,6 +6,7 @@ import uuid
 from django.conf import settings
 from django.contrib import messages
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
@@ -69,21 +70,59 @@ def danh_muc_save(request):
     return redirect("danh_muc")
 
 
+CHUA_PHAN_LOAI = ("DM-CHUA-PL", "Chưa phân loại")
+
+
 @admin_required
 @require_POST
 def danh_muc_delete(request, pk):
+    """Admin được xóa:
+    - danh mục đang hoạt động nhưng trống (không còn SP / danh mục con);
+    - danh mục đã NGỪNG HOẠT ĐỘNG dù còn SP / danh mục con: danh mục con được chuyển lên danh mục cha,
+      sản phẩm được chuyển sang danh mục cha (hoặc "Chưa phân loại" nếu là danh mục gốc) — sản phẩm và
+      lịch sử giao dịch được giữ nguyên.
+    """
     dm = get_object_or_404(DanhMuc, pk=pk)
-    if dm.san_pham.exists():
-        messages.error(request, f"Không thể xóa “{dm.ten_danhmuc}”: vẫn còn sản phẩm thuộc danh mục.")
-    elif dm.con.exists():
-        messages.error(request, f"Không thể xóa “{dm.ten_danhmuc}”: vẫn còn danh mục con bên trong.")
-    else:
-        try:
+    so_sp, so_con = dm.san_pham.count(), dm.con.count()
+    if dm.is_active and (so_sp or so_con):
+        messages.error(request, f"Không thể xóa “{dm.ten_danhmuc}” khi đang hoạt động và còn sản phẩm / danh mục con. "
+                                "Hãy chuyển danh mục sang “Ngừng hoạt động” trước khi xóa.")
+        return redirect("danh_muc")
+    cha = dm.id_dmcha
+    trung = DanhMuc.objects.filter(id_dmcha=cha, ten_danhmuc__in=dm.con.values("ten_danhmuc")).exclude(pk=dm.pk)
+    if trung.exists():
+        messages.error(request, f"Không thể xóa: danh mục con “{trung.first().ten_danhmuc}” bị trùng tên khi chuyển lên "
+                                f"{'“' + cha.ten_danhmuc + '”' if cha else 'cấp gốc'}. Hãy đổi tên trước.")
+        return redirect("danh_muc")
+    try:
+        with transaction.atomic():
+            noi_nhan = cha
+            if so_sp and noi_nhan is None:
+                noi_nhan, _ = DanhMuc.objects.get_or_create(
+                    ma_danhmuc=CHUA_PHAN_LOAI[0],
+                    defaults={"ten_danhmuc": CHUA_PHAN_LOAI[1], "mo_ta": "Sản phẩm thuộc danh mục đã bị xóa"},
+                )
+                if noi_nhan.pk == dm.pk:
+                    raise ProtectedError("Không thể xóa danh mục Chưa phân loại khi còn sản phẩm.", set())
+            if so_sp:
+                dm.san_pham.update(id_danhmuc=noi_nhan)
+            if so_con:
+                dm.con.update(id_dmcha=cha)
+            ten = dm.ten_danhmuc
             dm.delete()
-            audit(request, "XOA", "danh_muc", pk, dm.ten_danhmuc)
-            messages.success(request, f"Đã xóa danh mục “{dm.ten_danhmuc}”.")
-        except ProtectedError:
-            messages.error(request, "Danh mục đang được tham chiếu, không thể xóa.")
+            audit(request, "XOA", "danh_muc", pk, {
+                "ten": ten, "so_sp_chuyen": so_sp, "so_con_chuyen": so_con,
+                "chuyen_sang": noi_nhan.ten_danhmuc if noi_nhan else "cấp gốc",
+            })
+        chuyen = []
+        if so_sp:
+            chuyen.append(f"{so_sp} sản phẩm → “{noi_nhan.ten_danhmuc}”")
+        if so_con:
+            chuyen.append(f"{so_con} danh mục con → {'“' + cha.ten_danhmuc + '”' if cha else 'cấp gốc'}")
+        messages.success(request, f"Đã xóa danh mục “{ten}”." + (f" Đã chuyển {', '.join(chuyen)}." if chuyen else ""))
+    except ProtectedError as e:
+        messages.error(request, e.args[0] if e.args and isinstance(e.args[0], str) else
+                       "Danh mục đang được tham chiếu, không thể xóa.")
     return redirect("danh_muc")
 
 
@@ -128,6 +167,7 @@ def san_pham_list(request, form=None, form_pk=None):
         "so_dm": DanhMuc.objects.count(),
         "danh_muc": DanhMuc.objects.filter(is_active=True),
         "xem": xem,
+        "xem_lo": list(xem.lo_con_hang().select_related("id_sp")) if xem else [],
         "modal": _modal_state(form, form_pk) if form else None,
         "goi_y_ma": f"SP-{SanPham.objects.count() + 1:04d}",
         "don_vi_goi_y": sorted(set(SanPham.objects.values_list("don_vi", flat=True)) | {"Cái", "Hộp", "Chai", "Gói", "Lon", "Thùng", "Kg", "Ram"}),

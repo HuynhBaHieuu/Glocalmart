@@ -8,7 +8,8 @@ from django.views.decorators.http import require_POST
 
 from ..decorators import admin_required
 from ..models import AuditLog, ChiTietPhieuXuat, PhieuXuat, SanPham
-from ..services import NghiepVuError, audit, kiem_tra_dong_xuat, next_doc_code, post_stock_move, xac_nhan_phieu_xuat
+from ..services import NghiepVuError, audit, huy_phieu_xuat, kiem_tra_dong_xuat, next_doc_code, \
+    ton_con_han_theo_sp, xac_nhan_phieu_xuat
 from .common import paginate, products_json, to_decimal
 
 
@@ -95,14 +96,17 @@ def xuat_form(request, ma=None):
 
 def xuat_detail(request, ma):
     phieu = get_object_or_404(PhieuXuat.objects.select_related("nguoi_tao", "nguoi_xac_nhan"), pk=ma)
-    chi_tiet = list(phieu.chi_tiet.select_related("id_sp"))
+    chi_tiet = list(phieu.chi_tiet.select_related("id_sp").prefetch_related("phan_bo__lo__ma_phieu_nhap"))
     canh_bao = []
     if phieu.trang_thai == PhieuXuat.CHUA_XAC_NHAN:
+        con_han = ton_con_han_theo_sp([ct.id_sp_id for ct in chi_tiet])
         for ct in chi_tiet:
-            if ct.so_luong_xuat > ct.id_sp.ton_kho:
-                canh_bao.append(f"{ct.id_sp.ten_sp}: tồn hiện tại chỉ còn {ct.id_sp.ton_kho.normalize():f} {ct.id_sp.don_vi}.")
-            if phieu.ly_do_xuat == PhieuXuat.BAN_HANG and ct.id_sp.da_het_han:
-                canh_bao.append(f"{ct.id_sp.ten_sp} đã quá hạn sử dụng — không thể xuất bán.")
+            sp = ct.id_sp
+            if ct.so_luong_xuat > sp.ton_kho:
+                canh_bao.append(f"{sp.ten_sp}: tồn hiện tại chỉ còn {sp.ton_kho.normalize():f} {sp.don_vi}.")
+            elif phieu.ly_do_xuat != PhieuXuat.HUY_HANG and ct.so_luong_xuat > con_han.get(sp.pk, 0):
+                canh_bao.append(f"{sp.ten_sp}: chỉ còn {con_han.get(sp.pk, 0).normalize():f} {sp.don_vi} thuộc lô còn hạn "
+                                "— lô đã hết hạn chỉ được xuất với lý do Hủy hàng.")
     return render(request, "xuat/detail.html", {
         "active": "xuat",
         "p": phieu,
@@ -131,25 +135,10 @@ def xuat_print(request, ma):
 
 @require_POST
 def xuat_cancel(request, ma):
-    ly_do = request.POST.get("ly_do", "").strip()
-    if not ly_do:
-        messages.error(request, "Vui lòng nhập lý do hủy phiếu.")
-        return redirect("xuat_detail", ma=ma)
+    """Hủy phiếu kèm lý do; phiếu đã xác nhận (chỉ Admin) được hoàn tồn về đúng các lô đã lấy."""
     try:
-        with transaction.atomic():
-            phieu = PhieuXuat.objects.select_for_update().get(pk=ma)
-            if phieu.trang_thai == PhieuXuat.DA_HUY:
-                raise NghiepVuError("Phiếu đã bị hủy trước đó.")
-            if phieu.trang_thai == PhieuXuat.DA_XAC_NHAN:
-                if not request.user.is_admin:
-                    raise NghiepVuError("Chỉ Quản trị viên được hủy phiếu đã xác nhận.")
-                for ct in phieu.chi_tiet.all():
-                    post_stock_move(san_pham_id=ct.id_sp_id, loai="XUAT_KHO", user=request.user,
-                                    delta=ct.so_luong_xuat, phieu_xuat=phieu)
-            phieu.trang_thai = PhieuXuat.DA_HUY
-            phieu.ly_do_huy = ly_do
-            phieu.save(update_fields=["trang_thai", "ly_do_huy"])
-            audit(request, "HUY", "phieu_xuat", ma, ly_do)
+        huy_phieu_xuat(ma, request.user, request.POST.get("ly_do", ""))
+        audit(request, "HUY", "phieu_xuat", ma, request.POST.get("ly_do", "").strip())
         messages.success(request, f"Đã hủy phiếu {ma}.")
     except NghiepVuError as e:
         messages.error(request, f"Không thể hủy: {e}")

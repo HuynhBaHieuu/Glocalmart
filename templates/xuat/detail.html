@@ -38,12 +38,13 @@
       <div class="border-b px-5 py-3.5 font-semibold">Danh sách sản phẩm xuất</div>
       <div class="overflow-x-auto">
         <table class="tbl compact">
-          <thead><tr><th>Sản phẩm</th><th>Hạn sử dụng</th><th class="text-right">SL xuất</th><th class="text-right">Tồn hiện tại</th><th class="text-right">Tồn sau xuất</th></tr></thead>
+          <thead><tr><th>Sản phẩm</th><th>{% if p.trang_thai == 'CHUA_XAC_NHAN' %}Hạn sử dụng{% else %}Lấy từ lô (FEFO){% endif %}</th><th class="text-right">SL xuất</th><th class="text-right">Tồn hiện tại</th><th class="text-right">Tồn sau xuất</th></tr></thead>
           <tbody>
           {% for ct in chi_tiet %}
           <tr class="{% if p.trang_thai == 'CHUA_XAC_NHAN' and ct.so_luong_xuat > ct.id_sp.ton_kho %}bg-red-50/50{% endif %}">
             <td><p class="font-medium">{{ ct.id_sp.ten_sp }}</p><p class="text-[11px] text-gray-400">SKU: {{ ct.id_sp.ma_sp }}</p></td>
-            <td>{{ ct.id_sp.han_su_dung|d }} {% if ct.id_sp.da_het_han %}<span class="rounded bg-red-50 px-1.5 text-[10.5px] text-red-600">Hết hạn</span>{% endif %}</td>
+            <td class="whitespace-nowrap">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}{{ ct.id_sp.han_su_dung|d }} {% if ct.id_sp.da_het_han %}<span class="rounded bg-red-50 px-1.5 text-[10.5px] text-red-600">Có lô hết hạn</span>{% endif %}
+              {% else %}{% for pb in ct.phan_bo.all %}<p class="text-[12px]"><a href="{% url 'nhap_detail' pb.lo.ma_phieu_nhap_id %}" class="font-medium text-brand-700 hover:underline">{{ pb.lo.ma_phieu_nhap_id }}</a> · HSD {{ pb.lo.han_su_dung|d }} · <b>{{ pb.so_luong|qty }}</b></p>{% empty %}<span class="text-gray-300">—</span>{% endfor %}{% endif %}</td>
             <td class="text-right font-semibold">{{ ct.so_luong_xuat|qty }} {{ ct.id_sp.don_vi }}</td>
             <td class="text-right">{{ ct.id_sp.ton_kho|qty }}</td>
             <td class="text-right">{% if p.trang_thai == 'CHUA_XAC_NHAN' %}<span class="{% if ct.so_luong_xuat > ct.id_sp.ton_kho %}font-semibold text-red-600{% endif %}" data-ton="{{ ct.id_sp.ton_kho|num }}" data-xuat="{{ ct.so_luong_xuat|num }}"></span>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>

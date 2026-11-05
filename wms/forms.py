@@ -51,8 +51,8 @@ class SanPhamForm(BaseForm):
     class Meta:
         model = SanPham
         fields = [
-            "ma_sp", "ten_sp", "mo_ta", "id_danhmuc", "don_vi", "gia_ban", "nguong_toi_thieu", "han_su_dung",
-            "so_ngay_canh_bao",
+            # han_su_dung không nhập tay: = hạn sớm nhất của các lô còn hàng (services.cap_nhat_hsd_san_pham)
+            "ma_sp", "ten_sp", "mo_ta", "id_danhmuc", "don_vi", "gia_ban", "nguong_toi_thieu", "so_ngay_canh_bao",
         ]
 
     def __init__(self, *args, **kwargs):

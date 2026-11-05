@@ -7,7 +7,7 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
-from ..models import SanPham
+from ..models import DanhMuc, SanPham
 
 
 def to_decimal(value, default=None):
@@ -49,6 +49,18 @@ def paginate(request, qs, per_page=10):
 def products_json(qs=None, include_stock=True):
     """Danh sách sản phẩm cho các form chọn sản phẩm (Alpine.js)."""
     qs = qs if qs is not None else SanPham.objects.filter(trang_thai=1)
+    cha = dict(DanhMuc.objects.values_list("pk", "id_dmcha_id"))
+
+    def to_tien(dm_id):
+        """Danh mục của SP + toàn bộ danh mục cha (để 'thêm cả danh mục' lấy được danh mục con)."""
+        ids, node = [], dm_id
+        while node and node not in ids:
+            ids.append(node)
+            node = cha.get(node)
+        return ids
+
+    from ..services import ton_con_han_theo_sp
+    con_han = ton_con_han_theo_sp()
     data = []
     for sp in qs.select_related("id_danhmuc"):
         item = {
@@ -57,14 +69,16 @@ def products_json(qs=None, include_stock=True):
             "ten": sp.ten_sp,
             "dvt": sp.don_vi,
             "dm": sp.id_danhmuc.ten_danhmuc,
+            "dm_ids": to_tien(sp.id_danhmuc_id),
             "gia_von": float(sp.gia_von),
             "gia_ban": float(sp.gia_ban),
             "hsd": sp.han_su_dung.isoformat() if sp.han_su_dung else None,
-            "het_han": sp.da_het_han,
+            "het_han": sp.da_het_han,  # có lô đã hết hạn còn hàng
             "active": sp.trang_thai == 1,
         }
         if include_stock:
             item["ton"] = float(sp.ton_kho)
+            item["ton_con_han"] = float(con_han.get(sp.pk, 0))  # được bán / điều chỉnh
         data.append(item)
     return data
 
