@@ -272,7 +272,8 @@ class SuaLoiTestglocalTest(Base):
         self.login(self.admin)
         r = self.client.get("/?tab=het_han")
         self.assertEqual(r.context["het_han"], 1)
-        self.assertContains(r, "Biểu đồ Cảnh báo Hạn sử dụng")
+        self.assertContains(r, "Hạn sử dụng")
+        self.assertContains(r, "Lô cần xử lý")
         self.assertContains(r, "Tạo phiếu xuất")
         self.assertNotContains(r, "Tồn kho Tối thiểu")
         self.assertContains(r, "Xuất báo cáo")
@@ -762,3 +763,23 @@ class SsRopTest(Base):
         for chu in ("Nhu cầu TB/ngày (d)", "Độ lệch chuẩn nhu cầu (σd)", "Lead time (LT)", "Tồn kho an toàn (SS)",
                     "Điểm đặt hàng lại (ROP)", "Ngày tính"):
             self.assertContains(r, chu)
+
+
+class DashboardGiaoDienTest(Base):
+    """Dashboard giao diện mới: menu dọc bên trái, Danh sách cảnh báo nằm trước Biến động kho & Lịch hết hạn."""
+
+    def test_dashboard_moi(self):
+        self.nhap(10, 20000, hsd=timezone.localdate() - timedelta(days=2))
+        for user, la_admin in ((self.admin, True), (self.nv, False)):
+            self.client.force_login(user)
+            for url in ("/", "/?tab=het_han", "/?tab=can_dat", "/?tab=tat_ca&page=2"):
+                r = self.client.get(url)
+                self.assertEqual(r.status_code, 200, url)
+                html = r.content.decode()
+                self.assertLess(html.index("Danh sách cảnh báo"), html.index("Lịch hết hạn"))
+                self.assertLess(html.index("Danh sách cảnh báo"), html.index("Nhập kho</button>") if "Nhập kho</button>" in html else html.index("Lịch hết hạn"))
+                self.assertEqual("/ton-kho/tinh-lai-ss-rop/" in html, la_admin)
+                self.assertEqual("/tai-khoan/" in html, la_admin)          # menu dọc theo quyền
+            r = self.client.get("/?tab=het_han")
+            self.assertEqual(len(r.context["page"]), 1)
+        self.assertEqual(self.client.get("/dashboard/mau-1/").status_code, 404)  # đã bỏ trang mẫu

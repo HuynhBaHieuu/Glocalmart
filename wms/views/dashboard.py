@@ -1,3 +1,6 @@
+from datetime import timedelta
+from decimal import Decimal
+
 from django.db.models import Max
 from django.shortcuts import render
 from django.utils import timezone
@@ -81,6 +84,55 @@ def _donut(phan, tong):
     return "conic-gradient(" + ", ".join(stops) + ")"
 
 
+THU = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+
+
+def _du_lieu_them(sps, nhom):
+    """Số liệu cho các thẻ Dashboard (biểu đồ tuần, lịch hạn, giá trị tồn, lô cần xử lý...)."""
+    hom_nay = timezone.localdate()
+    # biến động 7 ngày gần nhất (nhập / xuất theo nhật ký kho)
+    tu = hom_nay - timedelta(days=6)
+    ngay = {tu + timedelta(days=i): {"nhap": Decimal(0), "xuat": Decimal(0)} for i in range(7)}
+    for loai, luc, sl in (NhatKyKho.objects.filter(loai_giao_dich__in=[NhatKyKho.NHAP_KHO, NhatKyKho.XUAT_KHO],
+                                                   ngay_tao__gte=timezone.now() - timedelta(days=7))
+                          .values_list("loai_giao_dich", "ngay_tao", "sl_thay_doi")):
+        d = timezone.localtime(luc).date()
+        if d in ngay:
+            ngay[d]["nhap" if loai == NhatKyKho.NHAP_KHO else "xuat"] += abs(sl)
+    lon_nhat = max([v["xuat"] for v in ngay.values()] + [Decimal(1)])
+    tuan = [{"thu": THU[d.weekday()], "ngay": d, "hom_nay": d == hom_nay, **v,
+             "cao": int(v["xuat"] * 100 / lon_nhat), "max": v["xuat"] == lon_nhat and v["xuat"] > 0}
+            for d, v in ngay.items()]
+    # lịch hạn sử dụng 6 ngày tới (lô còn hàng)
+    lots = (ChiTietPhieuNhap.objects.filter(ma_phieu_nhap__trang_thai=PhieuNhap.DA_XAC_NHAN, so_luong_con_lai__gt=0,
+                                            id_sp__trang_thai=1, han_su_dung__gte=hom_nay,
+                                            han_su_dung__lte=hom_nay + timedelta(days=5))
+            .select_related("id_sp").order_by("han_su_dung"))
+    lich = [{"ngay": hom_nay + timedelta(days=i), "thu": THU[(hom_nay + timedelta(days=i)).weekday()], "lo": []}
+            for i in range(6)]
+    for lo in lots:
+        lich[(lo.han_su_dung - hom_nay).days]["lo"].append(lo)
+    lo_xu_ly = nhom["het_han"] + nhom["sap_het_han"]
+    nk = list(NhatKyKho.objects.filter(loai_giao_dich__in=NhatKyKho.LOAI_BIEN_DONG)
+              .select_related("id_sp").order_by("-ngay_tao", "-id_nhat_ky")[:40])
+    return {
+        "gia_tri_ton": sum((s.ton_kho * s.gia_von for s in sps if s.ton_kho > 0), Decimal(0)),
+        "tuan": tuan,
+        "tuan_xuat": sum((v["xuat"] for v in ngay.values()), Decimal(0)),
+        "tuan_nhap": sum((v["nhap"] for v in ngay.values()), Decimal(0)),
+        "lich": lich,
+        "lo_xu_ly": lo_xu_ly[:20],
+        "so_lo_xu_ly": len(lo_xu_ly),
+        "nhac_viec": lo_xu_ly[0] if lo_xu_ly else None,
+        "nk_nhom": [
+            ("Nhập kho", "arrow-down-left", [l for l in nk if l.loai_giao_dich == NhatKyKho.NHAP_KHO][:4]),
+            ("Xuất kho", "arrow-up-right", [l for l in nk if l.loai_giao_dich == NhatKyKho.XUAT_KHO][:4]),
+            ("Kiểm kê", "scale", [l for l in nk if l.loai_giao_dich == NhatKyKho.KIEM_KE][:4]),
+        ],
+        "hom_nay": hom_nay,
+    }
+
+
 def dashboard(request):
     sps, nhom = tinh_canh_bao()
     tong = len(sps)
@@ -127,6 +179,8 @@ def dashboard(request):
         "nhat_ky": NhatKyKho.objects.filter(loai_giao_dich__in=NhatKyKho.LOAI_BIEN_DONG)
         .select_related("id_sp", "nguoi_thuc_hien")[:6],
     }
+    ctx["can_xu_ly"] = het + duoi + can
+    ctx.update(_du_lieu_them(sps, nhom))
     return render(request, "dashboard.html", ctx)
 
 
