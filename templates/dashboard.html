@@ -24,31 +24,8 @@
 <!-- Dùng thanh bên & thanh trên chung của base.html như các trang khác; nền gradient chỉ cho vùng nội dung -->
 <div class="m1 m1-bg -mx-4 -my-6 min-h-[calc(100vh-4rem)] px-4 pb-6 pt-6 lg:-mx-8 lg:px-8">
   {% if user.is_admin %}<div class="mb-1 flex justify-end"><a href="{% url 'cau_hinh_ton_kho' %}" class="inline-flex items-center gap-2 rounded-full bg-white/60 px-4 py-2 text-[13px] text-gray-800 hover:bg-white"><i data-lucide="settings" class="h-4 w-4"></i>Cấu hình SS/ROP</a></div>{% endif %}
-      <!-- ============ LỜI CHÀO + TỶ LỆ + SỐ LỚN ============ -->
-      <section class="flex flex-wrap items-end justify-between gap-8">
-        <div class="min-w-0 flex-1">
-          <h1 class="text-[38px] font-light leading-tight tracking-tight text-gray-900 sm:text-[52px]">Xin chào, {{ user.ho_ten }}</h1>
-          <div class="mt-6 flex max-w-[880px] items-end gap-1.5">
-            <a href="?tab=het_hang#canh-bao" class="min-w-[86px]" style="flex: {{ pct.het|add:8 }}">
-              <p class="mb-2 text-[13px] text-gray-700">Hết hàng</p>
-              <span class="flex h-14 items-center rounded-full bg-[var(--dark)] px-4 text-[13px] text-white">{{ pct.het }}%</span></a>
-            <a href="?tab=can_dat#canh-bao" class="min-w-[86px]" style="flex: {{ pct.can|add:8 }}">
-              <p class="mb-2 text-[13px] text-gray-700">Cần đặt hàng</p>
-              <span class="flex h-14 items-center rounded-full bg-[var(--mint)] px-4 text-[13px] text-gray-900">{{ pct.can }}%</span></a>
-            <div class="min-w-[120px]" style="flex: {{ pct.an_toan|add:8 }}">
-              <p class="mb-2 text-[13px] text-gray-700">An toàn</p>
-              <span class="hatch flex h-14 items-center rounded-full px-4 text-[13px] text-gray-800">{{ pct.an_toan }}%</span></div>
-            <a href="?tab=duoi_an_toan#canh-bao" class="min-w-[86px]" style="flex: {{ pct.duoi|add:8 }}">
-              <p class="mb-2 text-[13px] text-gray-700">Dưới an toàn</p>
-              <span class="flex h-14 items-center rounded-full border border-gray-500/60 px-4 text-[13px] text-gray-800">{{ pct.duoi }}%</span></a>
-          </div>
-        </div>
-        <div class="flex gap-8 sm:gap-10">
-          <div><p class="flex items-start gap-2"><span class="mt-3 grid h-7 w-7 place-items-center rounded-full bg-white/70"><i data-lucide="package" class="h-3.5 w-3.5"></i></span><span class="text-[56px] font-light leading-none tracking-tight sm:text-[68px]">{{ tong }}</span></p><p class="mt-1 pl-9 text-[13px] text-gray-700">Sản phẩm</p></div>
-          <div><p class="flex items-start gap-2"><span class="mt-3 grid h-7 w-7 place-items-center rounded-full bg-white/70"><i data-lucide="package-plus" class="h-3.5 w-3.5"></i></span><span class="text-[56px] font-light leading-none tracking-tight sm:text-[68px]">{{ can_xu_ly }}</span></p><p class="mt-1 pl-9 text-[13px] text-gray-700">Cần nhập hàng</p></div>
-          <div><p class="flex items-start gap-2"><span class="mt-3 grid h-7 w-7 place-items-center rounded-full bg-white/70"><i data-lucide="calendar-clock" class="h-3.5 w-3.5"></i></span><span class="text-[56px] font-light leading-none tracking-tight sm:text-[68px]">{{ so_lo_xu_ly }}</span></p><p class="mt-1 pl-9 text-[13px] text-gray-700">Lô cận / hết hạn</p></div>
-        </div>
-      </section>
+      <!-- ============ LỜI CHÀO ============ -->
+      <h1 class="text-[38px] font-light leading-tight tracking-tight text-gray-900 sm:text-[52px]">Xin chào, {{ user.ho_ten }}</h1>
 
       <!-- ============ HÀNG THẺ ============ -->
       <section class="mt-8 grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
