@@ -129,9 +129,9 @@
           <template x-for="(t, i) in it.them" :key="'t' + i">
             <tr class="bg-blue-50/40">
               <td><div class="flex flex-wrap items-center gap-2">
-                <input type="date" x-model="t.hsd" :disabled="t.khong" class="input !w-40">
-                <label class="flex items-center gap-1.5 text-[12px]"><input type="checkbox" x-model="t.khong" class="rounded border-gray-300 text-brand-700"> Không có HSD</label>
-                <input type="hidden" form="form-gui-duyet" :name="'pr_hsd_' + it.ct" :value="t.khong ? 'none' : t.hsd"></div></td>
+                <input type="date" x-model="t.hsd" class="input !w-40">
+                <span class="text-[11.5px] text-gray-400">Không bắt buộc — để trống nếu hàng không có HSD</span>
+                <input type="hidden" form="form-gui-duyet" :name="'pr_hsd_' + it.ct" :value="t.hsd || 'none'"></div></td>
               {% if hien_sl_lo %}<td class="text-right text-gray-400">0</td>{% endif %}
               <td><input type="number" min="0" step="1" inputmode="numeric" form="form-gui-duyet" :name="'pr_sl_' + it.ct" x-model="t.sl" class="input text-center font-semibold" placeholder="0" onkeydown="return !'.,eE+-'.includes(event.key)"></td>
               <td><button type="button" class="text-gray-400 hover:text-red-600" title="Xóa dòng" @click="it.them.splice(i, 1)">✕</button></td>
@@ -139,7 +139,7 @@
           </template>
         </tbody>
       </table>
-      <button type="button" class="btn btn-ghost mt-2 !text-[12px]" @click="it.them.push({ hsd: '', khong: false, sl: '' })">+ Thêm hạn sử dụng khác (hàng không khớp lô nào)</button>
+      <button type="button" class="btn btn-ghost mt-2 !text-[12px]" @click="it.them.push({ hsd: '', sl: '' })">+ Thêm hạn sử dụng khác (hàng không khớp lô nào)</button>
     </div>
   </template>
 </div>
@@ -244,7 +244,6 @@ document.addEventListener('alpine:init', () => {
     tong(it) { return [...it.dong, ...it.them].reduce((s, d) => s + so(d.sl), 0); },
     ok(it) {
       if ([...it.dong, ...it.them].some(d => so(d.sl) < 0 || !Number.isInteger(so(d.sl)))) return false;
-      if (it.them.some(t => so(t.sl) > 0 && !t.khong && !t.hsd)) return false;
       return this.tong(it) === it.tong;
     },
     nhan(it) {

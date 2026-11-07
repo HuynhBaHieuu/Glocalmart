@@ -618,7 +618,7 @@ class LoFefoTest(Base):
         self.assertIsNone(it["dong"][0]["sl_ht"])               # đếm mù: nhân viên không thấy SL từng lô
         self.assertContains(r, "Phân rã hạn sử dụng")
         self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {
-            f"pr_hsd_{ct.pk}": [self.ngay(25).isoformat(), self.ngay(39).isoformat(), "none"],
+            f"pr_hsd_{ct.pk}": [self.ngay(25).isoformat(), self.ngay(39).isoformat(), ""],   # HSD để trống
             f"pr_sl_{ct.pk}": ["60", "40", "5"],
         })
         p.refresh_from_db()

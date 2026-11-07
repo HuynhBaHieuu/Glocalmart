@@ -117,7 +117,7 @@ def _bang_phan_ra(phieu, chi_tiet, an_he_thong):
         dong = [{"hsd": h.isoformat() if h else "none", "nhan": _nhan_hsd(h), "he_thong": True,
                  "sl_ht": int(sl) if hien_ht else None,
                  "sl": int(da_nhap.pop(h)) if h in da_nhap else ""} for h, sl in he_thong]
-        them = [{"hsd": h.isoformat() if h else "", "khong": h is None, "nhan": _nhan_hsd(h), "he_thong": False,
+        them = [{"hsd": h.isoformat() if h else "", "nhan": _nhan_hsd(h), "he_thong": False,
                  "sl_ht": 0 if hien_ht else None, "sl": int(sl)} for h, sl in da_nhap.items()]
         bang.append({"ct": ct.pk, "ma_sp": ct.id_sp.ma_sp, "ten": ct.id_sp.ten_sp, "don_vi": ct.don_vi,
                      "tong": int(ct.sl_dem_thuc_te or 0), "can": ct.can_phan_ra, "dong": dong, "them": them,
@@ -193,7 +193,7 @@ def kiem_dem(request, ma):
 def kiem_gui_duyet(request, ma):
     phieu = get_object_or_404(PhieuKiemKe, pk=ma)
     try:
-        # phân rã HSD của dòng lệch: các cặp (pr_hsd_<ct>, pr_sl_<ct>); hsd = "none" → hàng không có hạn
+        # phân rã HSD của dòng lệch: các cặp (pr_hsd_<ct>, pr_sl_<ct>); hsd trống / "none" → hàng không có hạn
         phan_ra = {}
         for ct in phieu.chi_tiet.select_related("id_sp"):
             hsds, sls = request.POST.getlist(f"pr_hsd_{ct.pk}"), request.POST.getlist(f"pr_sl_{ct.pk}")
@@ -204,14 +204,10 @@ def kiem_gui_duyet(request, ma):
                 sl = to_decimal(s) if s.strip() else Decimal(0)
                 if sl is None:
                     raise NghiepVuError(f"{ct.id_sp.ten_sp}: số lượng theo hạn sử dụng không hợp lệ.")
-                if h == "none":
-                    hsd = None
-                else:
-                    hsd = to_date(h)
-                    if hsd is None:
-                        if sl:
-                            raise NghiepVuError(f"{ct.id_sp.ten_sp}: chọn hạn sử dụng (hoặc “Không có HSD”) cho dòng hạn mới.")
-                        continue
+                # HSD không bắt buộc: để trống / "none" → hàng không có hạn sử dụng
+                hsd = None if h in ("", "none") else to_date(h)
+                if h not in ("", "none") and hsd is None:
+                    raise NghiepVuError(f"{ct.id_sp.ten_sp}: hạn sử dụng không hợp lệ.")
                 dong.append((hsd, sl))
             phan_ra[ct.pk] = dong
         gui_duyet(phieu, phan_ra)
