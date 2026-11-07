@@ -1,16 +1,21 @@
 """Lớp nghiệp vụ: mọi thay đổi tồn kho đều đi qua post_stock_move(); số lượng theo LÔ đi qua tru_ton_fefo()
 và các hàm lô bên dưới, nên luôn giữ được ràng buộc: tổng so_luong_con_lai các lô = SanPham.ton_kho."""
 import json
+import math
+import statistics
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Min, Q, Sum
 from django.utils import timezone
 
 from .models import (
     AuditLog,
+    CauHinhTonKho,
     ChiTietPhieuKiemKe,
     ChiTietPhieuNhap,
+    ChiTietPhieuXuat,
     DocSequence,
     NhaCungCap,
     NhatKyKho,
@@ -615,3 +620,85 @@ def dem_lai(phieu: PhieuKiemKe):
     phieu.trang_thai = PhieuKiemKe.DANG_KIEM
     phieu.ngay_gui_duyet = None
     phieu.save(update_fields=["trang_thai", "ngay_gui_duyet"])
+
+
+# ---------------------------------------------------------------- tồn kho an toàn (SS) & điểm đặt hàng lại (ROP)
+SO_NGAY_BAN_TOI_THIEU = 30  # lần bán đầu tiên phải cách hôm nay ≥ 30 ngày mới đủ dữ liệu
+
+
+def _dau_ngay(d):
+    return timezone.make_aware(datetime.combine(d, time.min), timezone.get_current_timezone())
+
+
+def _lam_tron_len(x):
+    return math.ceil(round(x, 6))  # tránh sai số dấu phẩy động (12.0000000001 → 13)
+
+
+def _lead_time(san_pham_id, cfg):
+    """LT = trung bình (ngày xác nhận − ngày tạo) của 5 phiếu nhập đã xác nhận gần nhất có chứa sản phẩm;
+    tối thiểu 1 ngày; chưa có phiếu nào → lead_time_mac_dinh. Bỏ qua phiếu hệ thống (tồn đầu kỳ, hàng thừa kiểm kê)."""
+    phieu = list(PhieuNhap.objects.filter(trang_thai=PhieuNhap.DA_XAC_NHAN, chi_tiet__id_sp_id=san_pham_id,
+                                          ngay_xac_nhan__isnull=False)
+                 .exclude(ma_phieu_nhap=PhieuNhap.MA_TON_DAU).exclude(ma_phieu_nhap__startswith="PN-KK-")
+                 .distinct().order_by("-ngay_xac_nhan")[:5])
+    if not phieu:
+        return float(cfg.lead_time_mac_dinh)
+    lt = statistics.fmean((p.ngay_xac_nhan - p.ngay_tao).total_seconds() / 86400 for p in phieu)
+    return max(1.0, lt)
+
+
+def tinh_ss_rop(san_pham_ids=None, hom_nay=None):
+    """Tính và LƯU SS / ROP cho các sản phẩm đang hoạt động (chạy hằng ngày hoặc khi Admin bấm “Tính lại”).
+
+    - Nhu cầu theo ngày: tổng so_luong_xuat của phiếu xuất BAN_HANG đã xác nhận, gom theo ngày xác nhận,
+      trong so_ngay_du_lieu ngày gần nhất (tính cả hôm nay); ngày không bán = 0.
+    - d = trung bình, σd = độ lệch chuẩn (mẫu) của nhu cầu/ngày; LT xem _lead_time(); Z = NormalDist().inv_cdf(mức phục vụ).
+    - SS = Z·σd·√LT ; ROP = d·LT + SS — làm tròn lên số nguyên.
+    - Chưa đủ dữ liệu (chưa bán, hoặc lần bán đầu tiên cách hôm nay < 30 ngày): SS = NULL, ROP = ngưỡng tối thiểu.
+    Trả về thống kê {"tong", "du_du_lieu", "chua_du"}.
+    """
+    cfg = CauHinhTonKho.lay()
+    hom_nay = hom_nay or timezone.localdate()
+    n = cfg.so_ngay_du_lieu
+    tu = hom_nay - timedelta(days=n - 1)
+    z = max(0.0, statistics.NormalDist().inv_cdf(float(cfg.muc_phuc_vu)))
+
+    sps = SanPham.objects.filter(trang_thai=SanPham.DANG_HOAT_DONG)
+    if san_pham_ids is not None:
+        sps = sps.filter(pk__in=san_pham_ids)
+    ban = ChiTietPhieuXuat.objects.filter(ma_phieu_xuat__ly_do_xuat=PhieuXuat.BAN_HANG,
+                                          ma_phieu_xuat__trang_thai=PhieuXuat.DA_XAC_NHAN,
+                                          ma_phieu_xuat__ngay_xac_nhan__isnull=False)
+    nhu_cau = {}  # {id_sp: {ngày: số lượng}}
+    for sp_id, luc, sl in (ban.filter(ma_phieu_xuat__ngay_xac_nhan__gte=_dau_ngay(tu),
+                                      ma_phieu_xuat__ngay_xac_nhan__lt=_dau_ngay(hom_nay + timedelta(days=1)))
+                           .values_list("id_sp_id", "ma_phieu_xuat__ngay_xac_nhan", "so_luong_xuat")):
+        ngay = timezone.localtime(luc).date()
+        nhu_cau.setdefault(sp_id, {})
+        nhu_cau[sp_id][ngay] = nhu_cau[sp_id].get(ngay, 0) + float(sl)
+    lan_ban_dau = dict(ban.values("id_sp_id").annotate(m=Min("ma_phieu_xuat__ngay_xac_nhan"))
+                       .values_list("id_sp_id", "m"))
+
+    luc_tinh = timezone.now()
+    tk = {"tong": 0, "du_du_lieu": 0, "chua_du": 0}
+    for sp in sps:
+        theo_ngay = nhu_cau.get(sp.pk, {})
+        chuoi = [theo_ngay.get(tu + timedelta(days=i), 0.0) for i in range(n)]
+        d = statistics.fmean(chuoi)
+        sigma = statistics.stdev(chuoi) if n > 1 else 0.0
+        lt = _lead_time(sp.pk, cfg)
+        dau = lan_ban_dau.get(sp.pk)
+        du = dau is not None and (hom_nay - timezone.localtime(dau).date()).days >= SO_NGAY_BAN_TOI_THIEU
+        if du:
+            ss_tho = z * sigma * math.sqrt(lt)
+            ss, rop = Decimal(_lam_tron_len(ss_tho)), Decimal(_lam_tron_len(d * lt + ss_tho))
+        else:
+            ss, rop = None, sp.nguong_toi_thieu
+        SanPham.objects.filter(pk=sp.pk).update(
+            ss=ss, rop=rop, ngay_tinh_rop=luc_tinh, du_du_lieu_ss=du,
+            nhu_cau_tb=Decimal(str(round(d, 4))), do_lech_nhu_cau=Decimal(str(round(sigma, 4))),
+            lead_time=Decimal(str(round(lt, 2))),
+        )
+        tk["tong"] += 1
+        tk["du_du_lieu" if du else "chua_du"] += 1
+    return tk

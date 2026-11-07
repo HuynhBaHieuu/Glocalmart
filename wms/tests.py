@@ -598,3 +598,167 @@ class LoFefoTest(Base):
         p.refresh_from_db()
         self.assertEqual(p.trang_thai, PhieuNhap.DA_XAC_NHAN)
         self.assertEqual(sorted(p.chi_tiet.values_list("so_luong_con_lai", flat=True)), [4, 6])
+
+
+class SsRopTest(Base):
+    """Chức năng 2: tồn kho an toàn (SS) và điểm đặt hàng lại (ROP)."""
+
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+        self.now = timezone.now()
+
+    def ban(self, ngay_truoc, sl, sp=None):
+        """Phiếu xuất Bán hàng đã xác nhận cách hôm nay `ngay_truoc` ngày (chỉ dữ liệu lịch sử cho công thức)."""
+        luc = self.now - timedelta(days=ngay_truoc)
+        p = PhieuXuat.objects.create(ma_phieu_xuat=next_doc_code("PX"), nguoi_tao=self.nv, ly_do_xuat=PhieuXuat.BAN_HANG,
+                                     trang_thai=PhieuXuat.DA_XAC_NHAN, ngay_xac_nhan=luc)
+        ChiTietPhieuXuat.objects.create(ma_phieu_xuat=p, id_sp=sp or self.sp, so_luong_xuat=sl)
+
+    def nhap_lt(self, so_ngay_cho, truoc=10):
+        """Phiếu nhập đã xác nhận, chờ hàng `so_ngay_cho` ngày (ngày xác nhận − ngày tạo)."""
+        xn = self.now - timedelta(days=truoc)
+        p = PhieuNhap.objects.create(ma_phieu_nhap=next_doc_code("PN"), id_ncc=self.ncc, nguoi_tao=self.nv,
+                                     ngay_tao=xn - timedelta(days=so_ngay_cho), trang_thai=PhieuNhap.DA_XAC_NHAN,
+                                     trang_thai_giao=PhieuNhap.DA_GIAO, ngay_xac_nhan=xn)
+        ChiTietPhieuNhap.objects.create(ma_phieu_nhap=p, id_sp=self.sp, so_luong_dat=1, don_gia_nhap=1)
+
+    def tinh(self):
+        from .services import tinh_ss_rop
+        tk = tinh_ss_rop()
+        self.sp.refresh_from_db()
+        return tk
+
+    def test_nhu_cau_deu_ss_bang_0_rop_bang_d_nhan_lt(self):
+        for i in range(90):                                   # bán đều 10/ngày suốt 90 ngày
+            self.ban(i, 10)
+        self.nhap_lt(3)
+        self.tinh()
+        sp = self.sp
+        self.assertTrue(sp.du_du_lieu_ss)
+        self.assertEqual((sp.nhu_cau_tb, sp.do_lech_nhu_cau, sp.lead_time, sp.ss, sp.rop), (10, 0, 3, 0, 30))
+        self.assertIsNotNone(sp.ngay_tinh_rop)
+        SanPham.objects.filter(pk=sp.pk).update(ton_kho=50)
+        sp.refresh_from_db()
+        self.assertEqual(sp.goi_y_dat(14), 120)               # 10 × (3 + 14) + 0 − 50
+
+    def test_cong_thuc_ss_rop_nhu_cau_dao_dong(self):
+        import math
+        import statistics
+        ban = {i: (20 if i % 2 else 0) for i in range(90)}    # ngày có ngày không → σd > 0
+        for i, sl in ban.items():
+            if sl:
+                self.ban(i, sl)
+        self.nhap_lt(4, truoc=30)
+        self.nhap_lt(6, truoc=20)                             # LT = (4 + 6) / 2 = 5
+        self.tinh()
+        chuoi = [ban[i] for i in range(90)]
+        d, sd = statistics.fmean(chuoi), statistics.stdev(chuoi)
+        z = statistics.NormalDist().inv_cdf(0.95)
+        self.assertAlmostEqual(float(self.sp.do_lech_nhu_cau), sd, places=3)
+        self.assertEqual(self.sp.lead_time, 5)
+        self.assertEqual(self.sp.ss, math.ceil(z * sd * math.sqrt(5)))
+        self.assertEqual(self.sp.rop, math.ceil(d * 5 + z * sd * math.sqrt(5)))
+
+    def test_lt_chi_lay_5_phieu_gan_nhat_toi_thieu_1_va_mac_dinh(self):
+        for i in range(40):
+            self.ban(i, 1)
+        self.tinh()
+        self.assertEqual(self.sp.lead_time, 7)                # chưa có phiếu nhập → lead_time_mac_dinh
+        self.nhap_lt(0)                                       # nhận ngay trong ngày → tối thiểu 1
+        self.tinh()
+        self.assertEqual(self.sp.lead_time, 1)
+        for k in range(5):                                    # 5 phiếu gần hơn, mỗi phiếu chờ 2 ngày
+            self.nhap_lt(2, truoc=5 - k)
+        self.tinh()
+        self.assertEqual(self.sp.lead_time, 2)
+
+    def test_chua_du_du_lieu(self):
+        self.sp.nguong_toi_thieu = 15
+        self.sp.save()
+        for i in range(10):                                   # lần bán đầu tiên mới cách 9 ngày
+            self.ban(i, 5)
+        tk = self.tinh()
+        self.assertEqual(tk["chua_du"], 1)
+        self.assertFalse(self.sp.du_du_lieu_ss)
+        self.assertIsNone(self.sp.ss)
+        self.assertEqual(self.sp.rop, 15)                     # ROP = ngưỡng tối thiểu
+
+    def test_ban_hang_ngoai_cua_so_va_ly_do_khac_khong_tinh(self):
+        for i in range(30, 40):
+            self.ban(i, 9)
+        self.ban(200, 1000)                                   # ngoài 90 ngày → không vào nhu cầu
+        p = PhieuXuat.objects.create(ma_phieu_xuat="PX-HUY", nguoi_tao=self.nv, ly_do_xuat=PhieuXuat.HUY_HANG,
+                                     trang_thai=PhieuXuat.DA_XAC_NHAN, ngay_xac_nhan=self.now)
+        ChiTietPhieuXuat.objects.create(ma_phieu_xuat=p, id_sp=self.sp, so_luong_xuat=500)  # hủy hàng → không tính
+        self.tinh()
+        self.assertEqual(self.sp.nhu_cau_tb, 1)               # 10 ngày × 9 / 90 ngày
+
+    def test_canh_bao_ton_kho_theo_ss_rop(self):
+        sp = self.sp
+        sp.ss, sp.rop = D(10), D(25)
+        for ton, muc in ((0, "HET_HANG"), (5, "DUOI_AN_TOAN"), (10, "DUOI_AN_TOAN"), (11, "CAN_DAT_HANG"),
+                         (25, "CAN_DAT_HANG"), (26, "AN_TOAN")):
+            sp.ton_kho = D(ton)
+            self.assertEqual(sp.muc_ton, muc, ton)
+        sp.ss, sp.rop, sp.nguong_toi_thieu, sp.ton_kho = None, None, D(10), D(8)   # chưa tính → dùng ngưỡng
+        self.assertEqual(sp.muc_ton, "CAN_DAT_HANG")
+
+    def test_dashboard_bang_ss_rop_va_tao_phieu_nhap_goi_y(self):
+        SanPham.objects.filter(pk=self.sp.pk).update(ton_kho=5, ss=10, rop=25, nhu_cau_tb=2, lead_time=3,
+                                                     du_du_lieu_ss=True)
+        self.client.force_login(self.nv)
+        r = self.client.get("/?tab=duoi_an_toan")
+        self.assertEqual([s.pk for s in r.context["page"]], [self.sp.pk])
+        self.assertContains(r, f"/nhap-kho/tao/?sp={self.sp.pk}&sl=39")   # 2 × (3 + 14) + 10 − 5
+        self.assertNotContains(r, "Tính lại SS/ROP")                       # nhân viên không có nút
+
+    def test_quyen_tinh_lai_va_cau_hinh(self):
+        from .models import CauHinhTonKho
+        self.client.force_login(self.nv)
+        self.client.post("/ton-kho/tinh-lai-ss-rop/")
+        self.sp.refresh_from_db()
+        self.assertIsNone(self.sp.ngay_tinh_rop)
+        self.assertEqual(self.client.get("/ton-kho/cau-hinh/").status_code, 302)
+        self.client.post("/ton-kho/cau-hinh/", {"muc_phuc_vu": "0.99", "so_ngay_du_lieu": "60",
+                                                "lead_time_mac_dinh": "5", "chu_ky_dat_hang": "7"})
+        self.assertEqual(CauHinhTonKho.lay().muc_phuc_vu, D("0.95"))
+
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get("/ton-kho/cau-hinh/").status_code, 200)
+        self.client.post("/ton-kho/cau-hinh/", {"muc_phuc_vu": "1.5", "so_ngay_du_lieu": "60",
+                                                "lead_time_mac_dinh": "5", "chu_ky_dat_hang": "7"})
+        self.assertEqual(CauHinhTonKho.lay().muc_phuc_vu, D("0.95"))          # giá trị sai → không lưu
+        self.client.post("/ton-kho/cau-hinh/", {"muc_phuc_vu": "0.99", "so_ngay_du_lieu": "60",
+                                                "lead_time_mac_dinh": "5", "chu_ky_dat_hang": "7", "tinh_lai": "1"})
+        cfg = CauHinhTonKho.lay()
+        self.assertEqual((cfg.muc_phuc_vu, cfg.so_ngay_du_lieu, cfg.lead_time_mac_dinh, cfg.chu_ky_dat_hang),
+                         (D("0.99"), 60, 5, 7))
+        self.sp.refresh_from_db()
+        self.assertIsNotNone(self.sp.ngay_tinh_rop)
+        self.client.post("/ton-kho/tinh-lai-ss-rop/", {"next": "https://evil.example/"})
+        self.assertEqual(self.client.post("/ton-kho/tinh-lai-ss-rop/", {"next": "https://evil.example/"}).url, "/")
+
+    def test_lenh_tinh_ss_rop_va_api(self):
+        from io import StringIO
+        from django.core.management import call_command
+        for i in range(40):
+            self.ban(i, 3)
+        call_command("tinh_ss_rop", stdout=StringIO())
+        self.sp.refresh_from_db()
+        self.assertIsNotNone(self.sp.rop)
+        raw = tao_api_key("test", self.admin)
+        r = self.client.get(f"/api/san-pham/{self.sp.ma_sp}/", HTTP_X_API_KEY=raw)
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(D(str(r.json()["rop"])), self.sp.rop)
+        self.assertIn("ss", r.json())
+
+    def test_chi_tiet_san_pham_hien_thi_ss_rop(self):
+        for i in range(40):
+            self.ban(i, 3)
+        self.tinh()
+        self.client.force_login(self.nv)
+        r = self.client.get(f"/san-pham/?xem={self.sp.pk}")
+        for chu in ("Nhu cầu TB/ngày (d)", "Độ lệch chuẩn nhu cầu (σd)", "Lead time (LT)", "Tồn kho an toàn (SS)",
+                    "Điểm đặt hàng lại (ROP)", "Ngày tính"):
+            self.assertContains(r, chu)

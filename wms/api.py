@@ -29,7 +29,7 @@ class SanPhamSerializer(serializers.ModelSerializer):
         model = SanPham
         fields = [
             "ma_sp", "ten_sp", "mo_ta", "ma_danh_muc", "danh_muc", "don_vi", "gia_ban", "ton_kho",
-            "nguong_toi_thieu", "han_su_dung", "anh_sp", "trang_thai", "canh_bao_ton", "canh_bao_han",
+            "nguong_toi_thieu", "ss", "rop", "han_su_dung", "anh_sp", "trang_thai", "canh_bao_ton", "canh_bao_han",
         ]
 
     def get_trang_thai(self, obj):
@@ -85,6 +85,8 @@ def ton_kho(request, ma_sp):
         "ten_sp": sp.ten_sp,
         "don_vi": sp.don_vi,
         "ton_kho": sp.ton_kho,
+        "ss": sp.ss,
+        "rop": sp.rop,
         "canh_bao_ton": sp.muc_ton,
         "thoi_diem": timezone.now(),
     })

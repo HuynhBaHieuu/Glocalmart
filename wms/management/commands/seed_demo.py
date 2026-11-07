@@ -167,7 +167,11 @@ class Command(BaseCommand):
                                         ly_do_can_han="Hạn còn dài tại thời điểm nhận hàng (dữ liệu demo)")
                     ChiTietPhieuNhap.objects.filter(ma_phieu_nhap=p).update(ghi_chu_doi_soat=None)
                     t2 = t + timedelta(hours=2)
-                    PhieuNhap.objects.filter(pk=p.pk).update(ngay_xac_nhan=t2, ngay_cap_nhat_giao=t2)
+                    # đơn được đặt trước ngày giao 2–5 ngày → lead time thực tế cho SS/ROP
+                    dat = t - timedelta(days=rnd.randint(2, 5))
+                    PhieuNhap.objects.filter(pk=p.pk).update(ngay_tao=dat, ngay_xac_nhan=t2, ngay_cap_nhat_giao=t2)
+                    AuditLog.objects.filter(doi_tuong="phieu_nhap", ma_doi_tuong=p.pk, hanh_dong="TAO_PHIEU").update(
+                        ngay_tao=dat)
                     backdate(p, t2, "ma_phieu_nhap")
                     AuditLog.objects.create(nguoi_dung=user, hanh_dong="XAC_NHAN", doi_tuong="phieu_nhap",
                                             ma_doi_tuong=p.pk, chi_tiet="Đã giao & tự động cập nhật tồn kho", ngay_tao=t2)
@@ -331,6 +335,10 @@ class Command(BaseCommand):
             lech = kiem_tra_tong_lo()
             if lech:
                 raise RuntimeError(f"Tổng lô lệch tồn kho: {lech[:5]}")
+
+            # tồn kho an toàn & điểm đặt hàng lại từ lịch sử bán hàng vừa tạo
+            from wms.services import tinh_ss_rop
+            tinh_ss_rop()
 
         sp_count = SanPham.objects.count()
         self.stdout.write(self.style.SUCCESS(

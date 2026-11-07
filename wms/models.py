@@ -126,6 +126,15 @@ class SanPham(models.Model):
     han_su_dung = models.DateField("Hạn sử dụng", null=True, blank=True)
     so_ngay_canh_bao = models.IntegerField("Số ngày cảnh báo", default=30)
     anh_sp = models.CharField("Ảnh", max_length=500, null=True, blank=True)
+    # ---- tồn kho an toàn (SS) & điểm đặt hàng lại (ROP): tính bởi services.tinh_ss_rop, KHÔNG tính khi mở trang
+    ss = models.DecimalField("Tồn kho an toàn (SS)", **QTY, null=True, blank=True)
+    rop = models.DecimalField("Điểm đặt hàng lại (ROP)", **QTY, null=True, blank=True)
+    ngay_tinh_rop = models.DateTimeField("Ngày tính SS/ROP", null=True, blank=True)
+    nhu_cau_tb = models.DecimalField("Nhu cầu TB/ngày (d)", max_digits=14, decimal_places=4, null=True, blank=True)
+    do_lech_nhu_cau = models.DecimalField("Độ lệch chuẩn nhu cầu (σd)", max_digits=14, decimal_places=4, null=True,
+                                          blank=True)
+    lead_time = models.DecimalField("Lead time (ngày)", max_digits=8, decimal_places=2, null=True, blank=True)
+    du_du_lieu_ss = models.BooleanField("Đủ dữ liệu tính SS", default=False)
     trang_thai = models.IntegerField(default=DANG_HOAT_DONG, choices=[(1, "Đang bán"), (0, "Ngừng bán")])
     ngay_tao = models.DateTimeField(auto_now_add=True)
     ngay_cap_nhat = models.DateTimeField(auto_now=True)
@@ -137,14 +146,33 @@ class SanPham(models.Model):
     def __str__(self):
         return f"{self.ma_sp} - {self.ten_sp}"
 
-    # ---- cảnh báo tồn kho
+    # ---- cảnh báo tồn kho theo SS / ROP
+    @property
+    def rop_ap_dung(self):
+        """ROP dùng để cảnh báo; chưa tính lần nào thì tạm dùng ngưỡng tối thiểu."""
+        return self.rop if self.rop is not None else self.nguong_toi_thieu
+
     @property
     def muc_ton(self):
+        """ton = 0 → Hết hàng · 0 < ton ≤ SS → Dưới mức an toàn · SS < ton ≤ ROP → Cần đặt hàng · còn lại an toàn."""
         if self.ton_kho <= 0:
             return "HET_HANG"
-        if self.ton_kho <= self.nguong_toi_thieu:
-            return "SAP_HET"
+        if self.ss is not None and self.ton_kho <= self.ss:
+            return "DUOI_AN_TOAN"
+        if self.ton_kho <= self.rop_ap_dung:
+            return "CAN_DAT_HANG"
         return "AN_TOAN"
+
+    def goi_y_dat(self, chu_ky_dat_hang):
+        """Gợi ý đặt = max(0, d·(LT + chu kỳ đặt hàng) + SS − tồn), làm tròn lên.
+        Chưa có nhu cầu bán (d = 0 / chưa tính): đặt cho đủ ROP."""
+        import math
+        d, lt = self.nhu_cau_tb or 0, self.lead_time or 0
+        if d > 0 and lt > 0:
+            can = d * (lt + chu_ky_dat_hang) + (self.ss or 0) - self.ton_kho
+        else:
+            can = self.rop_ap_dung - self.ton_kho
+        return max(0, math.ceil(can))
 
     # ---- cảnh báo hạn sử dụng
     @property
@@ -185,6 +213,25 @@ class SanPham(models.Model):
         return (
             self.ct_nhap.exists() or self.ct_xuat.exists() or self.ct_kiem.exists() or self.nhat_ky.exists()
         )
+
+
+# ---------------------------------------------------------------- CAU_HINH_TON_KHO
+class CauHinhTonKho(models.Model):
+    """Tham số tính SS / ROP — chỉ có 1 bản ghi (pk = 1), chỉ Admin được sửa."""
+    muc_phuc_vu = models.DecimalField("Mức phục vụ", max_digits=5, decimal_places=4, default=Decimal("0.95"))
+    so_ngay_du_lieu = models.PositiveIntegerField("Số ngày dữ liệu bán hàng", default=90)
+    lead_time_mac_dinh = models.PositiveIntegerField("Lead time mặc định (ngày)", default=7)
+    chu_ky_dat_hang = models.PositiveIntegerField("Chu kỳ đặt hàng (ngày)", default=14)
+    nguoi_cap_nhat = models.ForeignKey("NguoiDung", null=True, blank=True, on_delete=models.SET_NULL)
+    ngay_cap_nhat = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cau_hinh_ton_kho"
+
+    @classmethod
+    def lay(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 # ---------------------------------------------------------------- NHA_CUNG_CAP

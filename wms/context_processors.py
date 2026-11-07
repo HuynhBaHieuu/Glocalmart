@@ -21,7 +21,11 @@ def sidebar(request):
         return {}
     menu = [m for m in MENU if m[0] != "tai_khoan" or user.is_admin]
     active_sp = SanPham.objects.filter(trang_thai=1)
-    so_canh_bao = active_sp.filter(Q(ton_kho__lte=0) | Q(ton_kho__lte=F("nguong_toi_thieu"))).count()
+    # cần cảnh báo khi tồn ≤ ROP (chưa tính ROP thì dùng ngưỡng tối thiểu) — gồm Hết hàng / Dưới SS / Cần đặt hàng
+    so_canh_bao = active_sp.filter(
+        Q(ton_kho__lte=0) | Q(rop__isnull=False, ton_kho__lte=F("rop"))
+        | Q(rop__isnull=True, ton_kho__lte=F("nguong_toi_thieu"))
+    ).count()
     thong_bao = {
         "canh_bao_ton": so_canh_bao,
         "cho_duyet": PhieuKiemKe.objects.filter(trang_thai=PhieuKiemKe.CHO_DUYET).count() if user.is_admin else 0,

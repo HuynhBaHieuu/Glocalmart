@@ -1,15 +1,17 @@
+from django.db.models import Max
 from django.shortcuts import render
 from django.utils import timezone
 
 from ..decorators import admin_required
-from ..models import ChiTietPhieuNhap, DanhMuc, NhatKyKho, PhieuNhap, SanPham
+from ..models import CauHinhTonKho, ChiTietPhieuNhap, DanhMuc, NhatKyKho, PhieuNhap, SanPham
 from ..services import audit, canh_bao_han_su_dung
 from .common import excel_response, paginate
 
 TABS = [
     ("tat_ca", "Tất cả cảnh báo", None),
-    ("het_hang", "Đã hết hàng", "bg-red-500"),
-    ("sap_het", "Sắp hết hàng", "bg-orange-500"),
+    ("het_hang", "Hết hàng", "bg-red-500"),
+    ("duoi_an_toan", "Dưới mức an toàn", "bg-red-400"),
+    ("can_dat", "Cần đặt hàng", "bg-orange-500"),
     ("het_han", "Đã hết hạn", "bg-red-700"),
     ("sap_het_han", "Sắp hết hạn", "bg-amber-400"),
 ]
@@ -18,8 +20,13 @@ TABS = [
 LOT_TABS = ("het_han", "sap_het_han")  # 2 tab này hiển thị theo LÔ, các tab còn lại theo sản phẩm
 
 
+NHOM_TON = {"HET_HANG": "het_hang", "DUOI_AN_TOAN": "duoi_an_toan", "CAN_DAT_HANG": "can_dat"}
+
+
 def tinh_canh_bao():
-    """Quét thời gian thực: cảnh báo tồn kho theo sản phẩm, cảnh báo hạn sử dụng theo lô."""
+    """Cảnh báo tồn kho theo sản phẩm (SS/ROP đã lưu sẵn — không tính lại khi mở trang),
+    cảnh báo hạn sử dụng theo lô."""
+    chu_ky = CauHinhTonKho.lay().chu_ky_dat_hang
     sps = list(SanPham.objects.filter(trang_thai=1).select_related("id_danhmuc"))
     lots = canh_bao_han_su_dung()
     nhom = {k: [] for k, *_ in TABS}
@@ -31,12 +38,10 @@ def tinh_canh_bao():
         d[lo.muc_han] = d.get(lo.muc_han, 0) + lo.so_luong_con_lai
     for sp in sps:
         canh_bao = []
-        if sp.muc_ton == "HET_HANG":
-            nhom["het_hang"].append(sp)
-            canh_bao.append("HET_HANG")
-        elif sp.muc_ton == "SAP_HET":
-            nhom["sap_het"].append(sp)
-            canh_bao.append("SAP_HET")
+        if sp.muc_ton in NHOM_TON:
+            nhom[NHOM_TON[sp.muc_ton]].append(sp)
+            canh_bao.append(sp.muc_ton)
+        sp.goi_y = sp.goi_y_dat(chu_ky)
         sp.sl_han = sl_han.get(sp.pk, {})
         canh_bao += [k for k in ("DA_HET_HAN", "SAP_HET_HAN") if k in sp.sl_han]
         if canh_bao:
@@ -79,14 +84,14 @@ def _donut(phan, tong):
 def dashboard(request):
     sps, nhom = tinh_canh_bao()
     tong = len(sps)
-    het, sap = len(nhom["het_hang"]), len(nhom["sap_het"])
-    an_toan = tong - het - sap
+    het, duoi, can = len(nhom["het_hang"]), len(nhom["duoi_an_toan"]), len(nhom["can_dat"])
+    an_toan = tong - het - duoi - can
     tab, rows, dm = _loc(request, nhom)
 
     def pct(n, base=tong):
         return round(n * 100 / base) if base else 0
 
-    donut = _donut([(het, "#dc2626"), (sap, "#ea580c"), (an_toan, "#16a34a")], tong)
+    donut = _donut([(het, "#dc2626"), (duoi, "#f87171"), (can, "#ea580c"), (an_toan, "#16a34a")], tong)
 
     # biểu đồ hạn sử dụng theo LÔ: lô còn hàng, có hạn, của sản phẩm đang hoạt động
     co_hsd = ChiTietPhieuNhap.objects.filter(ma_phieu_nhap__trang_thai=PhieuNhap.DA_XAC_NHAN, so_luong_con_lai__gt=0,
@@ -99,9 +104,11 @@ def dashboard(request):
         "active": "dashboard",
         "tong": tong,
         "het": het,
-        "sap": sap,
+        "duoi": duoi,
+        "can": can,
         "an_toan": an_toan,
-        "pct": {"het": pct(het), "sap": pct(sap), "an_toan": pct(an_toan)},
+        "pct": {"het": pct(het), "duoi": pct(duoi), "can": pct(can), "an_toan": pct(an_toan)},
+        "ngay_tinh_rop": SanPham.objects.aggregate(m=Max("ngay_tinh_rop"))["m"],
         "het_han": hh,
         "sap_het_han": shh,
         "donut": donut,
@@ -129,8 +136,8 @@ def dashboard_export(request):
     _, nhom = tinh_canh_bao()
     tab, rows, _ = _loc(request, nhom)
     ten_tab = dict((k, label) for k, label, _ in TABS)[tab]
-    labels = {"HET_HANG": "Đã hết hàng", "SAP_HET": "Sắp hết hàng", "DA_HET_HAN": "Đã hết hạn",
-              "SAP_HET_HAN": "Sắp hết hạn"}
+    labels = {"HET_HANG": "Hết hàng", "DUOI_AN_TOAN": "Dưới mức an toàn", "CAN_DAT_HANG": "Cần đặt hàng",
+              "DA_HET_HAN": "Đã hết hạn", "SAP_HET_HAN": "Sắp hết hạn"}
     data = []
     if tab in LOT_TABS:
         headers = ["Mã SP", "Tên SP", "Lô (mã phiếu nhập)", "SL còn của lô", "Tổng tồn", "Hạn sử dụng", "Còn lại",
@@ -141,10 +148,10 @@ def dashboard_export(request):
                          lo.han_su_dung.strftime("%d/%m/%Y"), f"Quá hạn {-con} ngày" if con < 0 else f"Còn {con} ngày",
                          labels[lo.muc_han]])
     else:
-        headers = ["Mã SP", "Tên SP", "Danh mục", "ĐVT", "SL tồn", "Ngưỡng tối thiểu", "Hạn sớm nhất", "Trạng thái cảnh báo"]
+        headers = ["Mã SP", "Tên SP", "Danh mục", "ĐVT", "Tồn", "SS", "ROP", "Gợi ý đặt", "Trạng thái"]
         for sp in rows:
-            data.append([sp.ma_sp, sp.ten_sp, sp.id_danhmuc.ten_danhmuc, sp.don_vi, sp.ton_kho, sp.nguong_toi_thieu,
-                         sp.han_su_dung.strftime("%d/%m/%Y") if sp.han_su_dung else "",
+            data.append([sp.ma_sp, sp.ten_sp, sp.id_danhmuc.ten_danhmuc, sp.don_vi, sp.ton_kho,
+                         sp.ss if sp.ss is not None else "Chưa đủ dữ liệu", sp.rop_ap_dung, sp.goi_y,
                          ", ".join(labels.get(c, c) for c in sp.canh_bao)])
     luc = timezone.localtime().strftime("%d/%m/%Y %H:%M")
     audit(request, "XUAT_BAO_CAO", "canh_bao", tab, f"{ten_tab}: {len(rows)} sản phẩm")

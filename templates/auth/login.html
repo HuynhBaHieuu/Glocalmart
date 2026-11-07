@@ -6,13 +6,13 @@
 <style>
   .login-bg { background-color: #0B4C34; }
   /* ảnh cửa hàng bên phải, mờ dần sang nền xanh bên trái */
-  .login-photo { background: linear-gradient(90deg, #0B4C34 0%, rgb(11 76 52 / .85) 18%, rgb(11 76 52 / .35) 45%, rgb(11 76 52 / .15) 100%),
+  .login-photo { background: linear-gradient(90deg, #0B4C34 0%, rgb(11 76 52 / .9) 22%, rgb(11 76 52 / .35) 45%, rgb(11 76 52 / .15) 100%),
                  url("{% static 'img/login-bg.jpg' %}") center / cover no-repeat; }
   .font-brand { font-family: 'Cabin', 'Inter', sans-serif; }
   .font-serif-vn { font-family: 'Alegreya', Georgia, serif; }
-  .login-input { width: 100%; height: 38px; border: 0; border-radius: 8px; background: #F2F2F2; padding: 0 12px; font-size: 14px; }
-  .login-input:focus { outline: none; box-shadow: 0 0 0 2px #5A2E0A33; background: #EDEDED; }
-  .login-input.err { box-shadow: 0 0 0 2px #F87171; background: #FEF2F2; }
+  input.login-input { width: 100%; height: 38px; border: 0; border-radius: 8px; background: #F2F2F2; padding: 0 12px; font-size: 14px; }
+  input.login-input:focus { outline: none; box-shadow: 0 0 0 2px #5A2E0A33; background: #EDEDED; }
+  input.login-input.err { box-shadow: 0 0 0 2px #F87171; background: #FEF2F2; }
 </style>
 {% endblock %}
 {% block body %}
@@ -47,7 +47,7 @@
         <label for="password" class="mb-1.5 mt-4 block text-[16px] font-bold text-gray-900">Password</label>
         <div class="relative">
           <input id="password" name="password" :type="show ? 'text' : 'password'" type="password" autocomplete="current-password" required
-                 class="login-input pr-10 {% if error %}err{% endif %}">
+                 class="login-input {% if error %}err{% endif %}" style="padding-right:2.5rem">
           <button type="button" @click="show=!show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600" tabindex="-1" title="Hiện / ẩn mật khẩu">
             <i data-lucide="eye" class="h-4 w-4"></i>
           </button>

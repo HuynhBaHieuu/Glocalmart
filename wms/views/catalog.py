@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from ..decorators import admin_required
 from ..forms import DanhMucForm, NhaCungCapForm, SanPhamForm
-from ..models import DanhMuc, NhaCungCap, SanPham
+from ..models import CauHinhTonKho, DanhMuc, NhaCungCap, SanPham
 from ..services import audit
 from .common import excel_response, form_errors, paginate
 
@@ -142,10 +142,14 @@ def _sp_filter(request):
         qs = qs.filter(trang_thai=1)
     elif tab == "ngung":
         qs = qs.filter(trang_thai=0)
+    duoi_ss = Q(ss__isnull=False, ton_kho__lte=F("ss"))
+    duoi_rop = Q(rop__isnull=False, ton_kho__lte=F("rop")) | Q(rop__isnull=True, ton_kho__lte=F("nguong_toi_thieu"))
     if canh_bao == "het":
         qs = qs.filter(ton_kho__lte=0)
-    elif canh_bao == "sap_het":
-        qs = qs.filter(ton_kho__gt=0, ton_kho__lte=F("nguong_toi_thieu"))
+    elif canh_bao == "duoi_an_toan":
+        qs = qs.filter(duoi_ss, ton_kho__gt=0)
+    elif canh_bao == "can_dat":
+        qs = qs.filter(duoi_rop, ton_kho__gt=0).exclude(duoi_ss)
     sort = request.GET.get("sort", "ma_sp")
     if sort.lstrip("-") in ("ma_sp", "ten_sp", "gia_ban", "ton_kho"):
         qs = qs.order_by(sort)
@@ -168,6 +172,7 @@ def san_pham_list(request, form=None, form_pk=None):
         "danh_muc": DanhMuc.objects.filter(is_active=True),
         "xem": xem,
         "xem_lo": list(xem.lo_con_hang().select_related("id_sp")) if xem else [],
+        "xem_goi_y": xem.goi_y_dat(CauHinhTonKho.lay().chu_ky_dat_hang) if xem else None,
         "modal": _modal_state(form, form_pk) if form else None,
         "goi_y_ma": f"SP-{SanPham.objects.count() + 1:04d}",
         "don_vi_goi_y": sorted(set(SanPham.objects.values_list("don_vi", flat=True)) | {"Cái", "Hộp", "Chai", "Gói", "Lon", "Thùng", "Kg", "Ram"}),

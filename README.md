@@ -26,7 +26,8 @@ openpyxl (Excel) · ReportLab (PDF) · Deploy trên Vercel.
 | Nhập kho | Tạo phiếu (xem trước trước khi lưu) → Chờ giao → Đang giao → Đối soát (SL thực nhận, **HSD nhập tay từng lô**, “+ Lô” khi cùng SP giao về 2 hạn, lý do chênh lệch tính theo tổng SP, lô cận hạn/hết hạn phải xác nhận lại kèm lý do) → Đã giao: mỗi dòng thành 1 **lô** (`so_luong_con_lai`), cộng tồn, giá vốn bình quân. “Sửa hạn lô” sau khi nhập (bắt buộc lý do, ghi nhật ký kho). Hủy phiếu đã xác nhận chỉ khi lô chưa bị xuất bớt. In phiếu có cột HSD. |
 | Xuất kho | Lý do Bán hàng / Hủy hàng / Điều chỉnh, kiểm tra tồn thời gian thực (khóa dòng `SELECT … FOR UPDATE`), chặn xuất âm. Khi xác nhận: trừ theo **FEFO** (hạn tăng dần, không hạn xếp cuối, cùng hạn thì lô nhập trước), ghi phân bổ lô; không đủ → rollback “Không đủ hàng trong các lô”. Lô hết hạn chỉ xuất được với Hủy hàng. Hủy phiếu đã xác nhận trả hàng về đúng lô đã lấy. |
 | Kiểm kê | Tối đa 30 SP/phiếu, đếm mù lần 1 (ẩn tồn hệ thống), gắn cờ & đếm lần 2 dòng lệch, gửi duyệt (phần **thừa** phải nhập tay HSD), Quản lý xem chênh lệch + giá trị thất thoát → Duyệt: thiếu trừ theo FEFO, thừa tạo lô mới `PN-KK-…` / Từ chối / Xóa. Danh sách chỉ hiện phiếu đã gửi duyệt. |
-| Báo cáo & cảnh báo | Dashboard: thẻ Hết hàng / Sắp hết hàng / Đã hết hạn / Sắp hết hạn, 2 biểu đồ tròn (tồn kho, hạn sử dụng). Cảnh báo hạn **theo lô** (Mã SP, Lô, SL còn của lô, Tổng tồn, HSD, Còn x ngày) + nút Tạo phiếu xuất; Admin xuất Excel từng tab. Báo cáo N-X-T (bỏ qua nhật ký sửa hạn) theo thời gian / danh mục / sản phẩm, xuất Excel & PDF (chỉ Admin). |
+| Báo cáo & cảnh báo | Dashboard: Hết hàng / Dưới mức an toàn (tồn ≤ SS) / Cần đặt hàng (tồn ≤ ROP) / Đã hết hạn / Sắp hết hạn, 2 biểu đồ tròn. Bảng tồn kho: Tồn, SS, ROP, Gợi ý đặt + “Tạo phiếu nhập” điền sẵn số lượng gợi ý. Cảnh báo hạn **theo lô** + “Tạo phiếu xuất”; Admin xuất Excel từng tab. Báo cáo N-X-T (bỏ qua nhật ký sửa hạn) theo thời gian / danh mục / sản phẩm, xuất Excel & PDF (chỉ Admin). |
+| Tồn kho an toàn & ROP | SS = Z·σd·√LT, ROP = d·LT + SS từ lịch sử bán 90 ngày và lead time 5 phiếu nhập gần nhất; lưu sẵn vào sản phẩm, tính hằng ngày bằng `python manage.py tinh_ss_rop` hoặc nút “Tính lại SS/ROP” (Admin). Trang Cấu hình SS/ROP (mức phục vụ, số ngày dữ liệu, lead time mặc định, chu kỳ đặt hàng) chỉ Admin. Chưa đủ 30 ngày bán → “Chưa đủ dữ liệu”, ROP = ngưỡng tối thiểu. API sản phẩm trả thêm `ss`, `rop`. |
 | REST API | `GET /api/san-pham/`, `/api/san-pham/<ma_sp>/`, `/api/ton-kho/<ma_sp>/`, `/api/danh-muc/` — header `X-API-Key`. Admin tạo / thu hồi key trong *Quản lý tài khoản → REST API Key*. |
 | Nguyên tắc chung | Mã chứng từ `PREFIX-YYMM-####` reset theo tháng, mọi thay đổi tồn qua `post_stock_move()` và ghi `nhat_ky_kho`, mọi thao tác ghi lưu `audit_log`, chứng từ đã xác nhận chỉ được Hủy kèm lý do (hoàn tồn tự động). |
 
@@ -38,11 +39,11 @@ thời gian thực mỗi lần mở trang; PDF dùng ReportLab thay cho WeasyPri
 ```
 config/            settings, urls, wsgi (entry cho Vercel)
 wms/models.py      ERD: nguoi_dung, danh_muc, san_pham, nha_cung_cap, phieu_nhap/xuat/kiem_ke + chi tiết, nhat_ky_kho, audit_log, api_key, doc_sequence
-wms/services.py    nghiệp vụ: next_doc_code, post_stock_move, xác nhận nhập/xuất, đếm/duyệt kiểm kê, lô FEFO (tru_ton_fefo, sua_han_lo, canh_bao_han_su_dung)
+wms/services.py    nghiệp vụ: next_doc_code, post_stock_move, xác nhận nhập/xuất, đếm/duyệt kiểm kê, lô FEFO (tru_ton_fefo, sua_han_lo, canh_bao_han_su_dung), tinh_ss_rop
 wms/lo.py          chuyển tồn kho cũ sang lô (migration 0003, lệnh `kiem_tra_lo`)
 wms/views/         dashboard, catalog, nhap, xuat, kiemke, baocao, taikhoan, auth
 wms/api*.py        REST API + xác thực API Key
-wms/tests.py       49 test cho các quy tắc nghiệp vụ
+wms/tests.py       59 test cho các quy tắc nghiệp vụ
 templates/         giao diện theo Figma
 ```
 
@@ -55,6 +56,7 @@ python manage.py migrate          # không có DATABASE_URL → dùng SQLite
 python manage.py seed_demo        # tạo dữ liệu demo (thêm --reset để tạo lại)
 python manage.py runserver
 python manage.py test wms         # chạy kiểm thử
+python manage.py tinh_ss_rop       # tính SS/ROP (nên chạy hằng ngày)
 ```
 
 ## Deploy: Supabase + Vercel

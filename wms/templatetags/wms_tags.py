@@ -107,8 +107,9 @@ BADGES = {
     "HUY_HANG": ("Hủy hàng", "bg-red-50 text-red-600 ring-red-200"),
     "DIEU_CHINH": ("Điều chỉnh", "bg-violet-50 text-violet-700 ring-violet-200"),
     # tồn kho
-    "HET_HANG": ("Đã hết hàng", "bg-red-50 text-red-600 ring-red-200"),
-    "SAP_HET": ("Sắp hết hàng", "bg-orange-50 text-orange-600 ring-orange-200"),
+    "HET_HANG": ("Hết hàng", "bg-red-50 text-red-600 ring-red-200"),
+    "DUOI_AN_TOAN": ("Dưới mức an toàn", "bg-red-50 text-red-600 ring-red-200"),
+    "CAN_DAT_HANG": ("Cần đặt hàng", "bg-orange-50 text-orange-600 ring-orange-200"),
     "AN_TOAN": ("An toàn", "bg-emerald-50 text-emerald-700 ring-emerald-200"),
     "DA_HET_HAN": ("Đã hết hạn", "bg-red-50 text-red-600 ring-red-200"),
     "SAP_HET_HAN": ("Sắp hết hạn", "bg-orange-50 text-orange-600 ring-orange-200"),

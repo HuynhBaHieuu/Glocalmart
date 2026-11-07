@@ -174,8 +174,12 @@ function phieuNhap() {
         this.ncc = old.ncc; this.ngay = old.ngay; this.ghi_chu = old.ghi_chu;
         old.items.forEach(it => byId[it.id] && this.items.push({ id: it.id, p: byId[it.id], sl: it.sl, gia: it.gia }));
       }
-      const sp = new URLSearchParams(location.search).get('sp');
-      if (sp && byId[sp]) this.add(byId[sp]);
+      const q = new URLSearchParams(location.search), sp = q.get('sp');
+      if (sp && byId[sp]) {
+        this.add(byId[sp]);
+        const it = this.items.find(i => i.id === Number(sp));
+        if (it && Number(q.get('sl')) > 0) it.sl = Math.ceil(Number(q.get('sl')));
+      }
     },
     get results() {
       const q = this.search.trim().toLowerCase();

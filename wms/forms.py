@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 
-from .models import DanhMuc, NguoiDung, NhaCungCap, SanPham
+from .models import CauHinhTonKho, DanhMuc, NguoiDung, NhaCungCap, SanPham
 
 REQUIRED = "Vui lòng không bỏ trống"
 UNIQUE = "Đã tồn tại trong hệ thống"
@@ -121,3 +121,33 @@ class NguoiDungForm(BaseForm):
         if commit:
             user.save()
         return user
+
+
+class CauHinhTonKhoForm(BaseForm):
+    class Meta:
+        model = CauHinhTonKho
+        fields = ["muc_phuc_vu", "so_ngay_du_lieu", "lead_time_mac_dinh", "chu_ky_dat_hang"]
+
+    def clean_muc_phuc_vu(self):
+        v = self.cleaned_data["muc_phuc_vu"]
+        if v is None or not (0.5 <= v < 1):
+            raise forms.ValidationError("Từ 0,5 đến dưới 1 (VD: 0,95 = 95%)")
+        return v
+
+    def clean_so_ngay_du_lieu(self):
+        v = self.cleaned_data["so_ngay_du_lieu"]
+        if v is None or not (30 <= v <= 365):
+            raise forms.ValidationError("Từ 30 đến 365 ngày")
+        return v
+
+    def clean_lead_time_mac_dinh(self):
+        v = self.cleaned_data["lead_time_mac_dinh"]
+        if v is None or v < 1:
+            raise forms.ValidationError("Tối thiểu 1 ngày")
+        return v
+
+    def clean_chu_ky_dat_hang(self):
+        v = self.cleaned_data["chu_ky_dat_hang"]
+        if v is None or v < 1:
+            raise forms.ValidationError("Tối thiểu 1 ngày")
+        return v

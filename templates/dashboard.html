@@ -7,27 +7,39 @@
     <h1 class="text-[26px] font-semibold tracking-tight text-gray-900">Dashboard Cảnh báo</h1>
     <p class="mt-1 text-[13px] text-gray-500">Theo dõi danh sách sản phẩm vi phạm ngưỡng tồn tối thiểu và hạn sử dụng để chủ động kế hoạch nhập hàng.</p>
   </div>
-  <a href="/" class="btn btn-primary"><i data-lucide="refresh-cw"></i>Quét dữ liệu / Làm mới</a>
+  <div class="flex flex-wrap items-center gap-2">
+    {% if user.is_admin %}
+    <a href="{% url 'cau_hinh_ton_kho' %}" class="btn btn-ghost"><i data-lucide="settings-2"></i>Cấu hình SS/ROP</a>
+    <form method="post" action="{% url 'tinh_lai_ss_rop' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button class="btn btn-outline" title="SS/ROP được tính tự động hằng ngày; bấm để tính lại ngay"><i data-lucide="calculator"></i>Tính lại SS/ROP</button></form>
+    {% endif %}
+    <a href="/" class="btn btn-primary"><i data-lucide="refresh-cw"></i>Quét dữ liệu / Làm mới</a>
+  </div>
 </div>
 
-<!-- Thẻ cảnh báo tồn kho -->
-<div class="grid gap-4 md:grid-cols-2">
-  <a href="?tab=het_hang" class="rounded-2xl border border-red-200 bg-red-50/70 p-5 transition hover:shadow-md">
-    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-red-600"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Đã hết hàng (Tồn = 0)</p>
+<!-- Thẻ cảnh báo tồn kho (theo SS / ROP) & hạn sử dụng (theo lô) -->
+<div class="grid gap-4 md:grid-cols-6">
+  <a href="?tab=het_hang" class="rounded-2xl border border-red-200 bg-red-50/70 p-5 transition hover:shadow-md md:col-span-2">
+    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-red-600"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Hết hàng (Tồn = 0)</p>
     <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ het|stringformat:"02d" }}</p>
     <p class="text-[12px] text-gray-500">Cần lập phiếu nhập hàng gấp.</p>
   </a>
-  <a href="?tab=sap_het" class="rounded-2xl border border-orange-200 bg-orange-50/80 p-5 transition hover:shadow-md">
-    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-orange-600"><span class="h-2.5 w-2.5 rounded-full bg-orange-500"></span>Sắp hết hàng (Tồn ≤ Ngưỡng)</p>
-    <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ sap|stringformat:"02d" }}</p>
-    <p class="text-[12px] text-gray-500">Đã chạm ngưỡng tồn tối thiểu.</p>
+  <a href="?tab=duoi_an_toan" class="rounded-2xl border border-red-200 bg-red-50/40 p-5 transition hover:shadow-md md:col-span-2">
+    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-red-500"><span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>Dưới mức an toàn (Tồn ≤ SS)</p>
+    <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ duoi|stringformat:"02d" }}</p>
+    <p class="text-[12px] text-gray-500">Đã ăn vào tồn kho an toàn.</p>
   </a>
-  <a href="?tab=het_han" class="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 transition hover:shadow-md">
+  <a href="?tab=can_dat" class="rounded-2xl border border-orange-200 bg-orange-50/80 p-5 transition hover:shadow-md md:col-span-2">
+    <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-orange-600"><span class="h-2.5 w-2.5 rounded-full bg-orange-500"></span>Cần đặt hàng (Tồn ≤ ROP)</p>
+    <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ can|stringformat:"02d" }}</p>
+    <p class="text-[12px] text-gray-500">Đã chạm điểm đặt hàng lại.</p>
+  </a>
+  <a href="?tab=het_han" class="rounded-2xl border border-rose-200 bg-rose-50/70 p-5 transition hover:shadow-md md:col-span-3">
     <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-rose-700"><span class="h-2.5 w-2.5 rounded-full bg-rose-700"></span>Đã hết hạn sử dụng</p>
     <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ het_han|stringformat:"02d" }}</p>
     <p class="text-[12px] text-gray-500">Lô còn hàng đã quá hạn — cần lập phiếu xuất hủy.</p>
   </a>
-  <a href="?tab=sap_het_han" class="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 transition hover:shadow-md">
+  <a href="?tab=sap_het_han" class="rounded-2xl border border-amber-200 bg-amber-50/80 p-5 transition hover:shadow-md md:col-span-3">
     <p class="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-amber-700"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Sắp hết hạn sử dụng</p>
     <p class="mt-2 text-[34px] font-semibold text-gray-900">{{ sap_het_han|stringformat:"02d" }}</p>
     <p class="text-[12px] text-gray-500">Lô còn ≤ số ngày cảnh báo của sản phẩm — ưu tiên xuất trước.</p>
@@ -36,7 +48,7 @@
 
 <div class="mt-3 flex justify-between text-[11px] text-gray-400">
   <span>Warehouse MS · Quản lý tập trung, vận hành chính xác.</span>
-  <span>Đồng bộ lần cuối: {{ now|dt }}</span>
+  <span>SS/ROP tính lúc: {{ ngay_tinh_rop|dt }} · Đồng bộ lần cuối: {{ now|dt }}</span>
 </div>
 
 <div class="mt-3 grid gap-5 xl:grid-cols-[300px_1fr]">
@@ -50,8 +62,9 @@
         </div>
       </div>
       <ul class="space-y-2 text-[12.5px]">
-        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Đã hết hàng<span class="ml-auto font-semibold">{{ het }} ({{ pct.het }}%)</span></li>
-        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-orange-600"></span>Sắp hết hàng<span class="ml-auto font-semibold">{{ sap }} ({{ pct.sap }}%)</span></li>
+        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-600"></span>Hết hàng<span class="ml-auto font-semibold">{{ het }} ({{ pct.het }}%)</span></li>
+        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>Dưới mức an toàn<span class="ml-auto font-semibold">{{ duoi }} ({{ pct.duoi }}%)</span></li>
+        <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-orange-600"></span>Cần đặt hàng<span class="ml-auto font-semibold">{{ can }} ({{ pct.can }}%)</span></li>
         <li class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-green-600"></span>An toàn<span class="ml-auto font-semibold">{{ an_toan }} ({{ pct.an_toan }}%)</span></li>
       </ul>
     </div>
@@ -115,7 +128,7 @@
     </form>
     <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
       <i data-lucide="pin" class="h-3.5 w-3.5 text-red-500"></i><b class="text-brand-800">Quy tắc cảnh báo</b>
-      {% if theo_lo %}Xét từng lô còn hàng có hạn sử dụng: quá hạn → Đã hết hạn; còn ≤ số ngày cảnh báo của sản phẩm → Sắp hết hạn. Sắp xếp theo hạn tăng dần.{% else %}Tồn = 0 → Đã hết hàng; Tồn ≤ Ngưỡng tối thiểu → Sắp hết hàng; kèm sản phẩm có lô sắp/đã hết hạn (theo số ngày cảnh báo).{% endif %}
+      {% if theo_lo %}Xét từng lô còn hàng có hạn sử dụng: quá hạn → Đã hết hạn; còn ≤ số ngày cảnh báo của sản phẩm → Sắp hết hạn. Sắp xếp theo hạn tăng dần.{% else %}Tồn = 0 → Hết hàng; 0 &lt; Tồn ≤ SS → Dưới mức an toàn; SS &lt; Tồn ≤ ROP → Cần đặt hàng; kèm sản phẩm có lô sắp/đã hết hạn.{% endif %}
     </div>
     <div class="overflow-x-auto">
       <table class="tbl compact">
@@ -145,15 +158,16 @@
         {% endfor %}
         </tbody>
       {% else %}
-        <thead><tr><th>Mã SP</th><th>Tên SP</th><th class="text-right">SL tồn</th><th class="text-right">Ngưỡng tối thiểu</th><th>Hạn sớm nhất</th><th>Trạng thái cảnh báo</th><th>Thao tác</th></tr></thead>
+        <thead><tr><th>Mã SP</th><th>Tên SP</th><th class="text-right">Tồn</th><th class="text-right">SS</th><th class="text-right">ROP</th><th class="text-right">Gợi ý đặt</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
         <tbody>
         {% for s in page %}
           <tr>
             <td class="text-gray-500">{{ s.ma_sp }}</td>
             <td><a href="/san-pham/?xem={{ s.pk }}" class="font-medium text-gray-900 hover:text-brand-700">{{ s.ten_sp }}</a><p class="text-[11px] text-gray-400">{{ s.id_danhmuc.ten_danhmuc }}</p></td>
-            <td class="text-right font-semibold {% if s.ton_kho <= 0 %}text-red-600{% elif s.ton_kho <= s.nguong_toi_thieu %}text-orange-600{% endif %}">{{ s.ton_kho|qty }} <span class="font-normal text-gray-400">{{ s.don_vi }}</span></td>
-            <td class="text-right">{{ s.nguong_toi_thieu|qty }}</td>
-            <td class="whitespace-nowrap">{% if s.han_su_dung %}{{ s.han_su_dung|d }}<p class="text-[11px] {% if s.so_ngay_con_lai < 0 %}text-red-500{% else %}text-gray-400{% endif %}">{% if s.so_ngay_con_lai < 0 %}Quá hạn {{ s.so_ngay_con_lai|cut:"-" }} ngày{% else %}Còn {{ s.so_ngay_con_lai }} ngày{% endif %}</p>{% else %}<span class="text-gray-300">—</span>{% endif %}</td>
+            <td class="whitespace-nowrap text-right font-semibold {% if s.muc_ton == 'HET_HANG' or s.muc_ton == 'DUOI_AN_TOAN' %}text-red-600{% elif s.muc_ton == 'CAN_DAT_HANG' %}text-orange-600{% endif %}">{{ s.ton_kho|qty }} <span class="font-normal text-gray-400">{{ s.don_vi }}</span></td>
+            <td class="whitespace-nowrap text-right">{% if s.ss is not None %}{{ s.ss|qty }}{% else %}<span class="text-[11px] text-amber-600" title="Lần bán đầu tiên chưa đủ 30 ngày — ROP tạm bằng ngưỡng tối thiểu">Chưa đủ dữ liệu</span>{% endif %}</td>
+            <td class="text-right">{{ s.rop_ap_dung|qty }}</td>
+            <td class="text-right font-semibold text-brand-700">{% if s.goi_y %}{{ s.goi_y|qty }}{% else %}<span class="font-normal text-gray-300">0</span>{% endif %}</td>
             <td class="whitespace-nowrap"><div class="flex flex-wrap gap-1">{% for c in s.canh_bao %}{% badge c %}{% endfor %}</div></td>
             <td>
               <div class="flex flex-col items-start gap-1">
@@ -162,14 +176,14 @@
               {% elif 'SAP_HET_HAN' in s.canh_bao %}
                 <a href="/xuat-kho/tao/?sp={{ s.pk }}&sl={{ s.sl_han.SAP_HET_HAN|num }}&ghi_chu=S%E1%BA%AFp%20h%E1%BA%BFt%20h%E1%BA%A1n%20s%E1%BB%AD%20d%E1%BB%A5ng" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-amber-700 hover:underline"><i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i>Tạo phiếu xuất</a>
               {% endif %}
-              {% if 'HET_HANG' in s.canh_bao or 'SAP_HET' in s.canh_bao %}
-                <a href="/nhap-kho/tao/?sp={{ s.pk }}" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-brand-700 hover:underline"><i data-lucide="package-plus" class="h-3.5 w-3.5"></i>Tạo phiếu nhập</a>
+              {% if s.muc_ton != 'AN_TOAN' %}
+                <a href="/nhap-kho/tao/?sp={{ s.pk }}{% if s.goi_y %}&sl={{ s.goi_y }}{% endif %}" class="inline-flex items-center gap-1 whitespace-nowrap text-[12px] font-medium text-brand-700 hover:underline"><i data-lucide="package-plus" class="h-3.5 w-3.5"></i>Tạo phiếu nhập</a>
               {% endif %}
               </div>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="py-12 text-center text-gray-400"><i data-lucide="shield-check" class="mx-auto mb-2 h-8 w-8 text-emerald-500"></i>Không có sản phẩm nào cần cảnh báo.</td></tr>
+          <tr><td colspan="8" class="py-12 text-center text-gray-400"><i data-lucide="shield-check" class="mx-auto mb-2 h-8 w-8 text-emerald-500"></i>Không có sản phẩm nào cần cảnh báo.</td></tr>
         {% endfor %}
         </tbody>
       {% endif %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load wms_tags %}
+{% block title %}Cấu hình tồn kho an toàn{% endblock %}
+{% block content %}
+<nav class="mb-1 text-[11.5px] text-gray-400"><a href="{% url 'dashboard' %}" class="hover:underline">Dashboard cảnh báo</a> <span class="mx-1">›</span> <span class="font-medium text-brand-700">Cấu hình SS / ROP</span></nav>
+<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-[24px] font-semibold text-gray-900">Cấu hình tồn kho an toàn &amp; điểm đặt hàng lại</h1>
+    <p class="mt-1 text-[13px] text-gray-500">Tham số dùng khi hệ thống tính SS / ROP hằng ngày. Chỉ Quản trị viên được sửa.</p>
+  </div>
+  <a href="{% url 'dashboard' %}" class="btn btn-ghost"><i data-lucide="arrow-left"></i>Về Dashboard</a>
+</div>
+
+<div class="grid gap-5 xl:grid-cols-[1fr_360px]">
+  <form method="post" class="card p-6">
+    {% csrf_token %}
+    <div class="grid gap-5 sm:grid-cols-2">
+      <div>
+        <label class="label">Mức phục vụ <span class="text-red-500">*</span> <span class="err-text">{{ loi.muc_phuc_vu }}</span></label>
+        <input name="muc_phuc_vu" type="number" step="0.0001" min="0.5" max="0.9999" value="{{ form.muc_phuc_vu.value|stringformat:'s' }}" class="input {% if loi.muc_phuc_vu %}err{% endif %}">
+        <p class="hint">Xác suất không bị hết hàng trong thời gian chờ hàng. 0,95 → Z ≈ 1,65.</p>
+      </div>
+      <div>
+        <label class="label">Số ngày dữ liệu bán hàng <span class="text-red-500">*</span> <span class="err-text">{{ loi.so_ngay_du_lieu }}</span></label>
+        <input name="so_ngay_du_lieu" type="number" step="1" min="30" max="365" value="{{ form.so_ngay_du_lieu.value|stringformat:'s' }}" class="input {% if loi.so_ngay_du_lieu %}err{% endif %}">
+        <p class="hint">Lấy nhu cầu/ngày từ phiếu xuất Bán hàng đã xác nhận trong số ngày gần nhất này.</p>
+      </div>
+      <div>
+        <label class="label">Lead time mặc định (ngày) <span class="text-red-500">*</span> <span class="err-text">{{ loi.lead_time_mac_dinh }}</span></label>
+        <input name="lead_time_mac_dinh" type="number" step="1" min="1" value="{{ form.lead_time_mac_dinh.value|stringformat:'s' }}" class="input {% if loi.lead_time_mac_dinh %}err{% endif %}">
+        <p class="hint">Dùng khi sản phẩm chưa có phiếu nhập đã xác nhận nào.</p>
+      </div>
+      <div>
+        <label class="label">Chu kỳ đặt hàng (ngày) <span class="text-red-500">*</span> <span class="err-text">{{ loi.chu_ky_dat_hang }}</span></label>
+        <input name="chu_ky_dat_hang" type="number" step="1" min="1" value="{{ form.chu_ky_dat_hang.value|stringformat:'s' }}" class="input {% if loi.chu_ky_dat_hang %}err{% endif %}">
+        <p class="hint">Khoảng cách giữa 2 lần đặt hàng — dùng để tính số lượng gợi ý đặt.</p>
+      </div>
+    </div>
+    <div class="mt-6 flex flex-wrap items-center justify-end gap-2 border-t pt-5">
+      {% if cfg.ngay_cap_nhat %}<span class="mr-auto text-[11.5px] text-gray-400">Cập nhật lần cuối: {{ cfg.ngay_cap_nhat|dt }}{% if cfg.nguoi_cap_nhat %} · {{ cfg.nguoi_cap_nhat.ho_ten }}{% endif %}</span>{% endif %}
+      <button class="btn btn-outline"><i data-lucide="save"></i>Lưu cấu hình</button>
+      <button name="tinh_lai" value="1" class="btn btn-primary"><i data-lucide="calculator"></i>Lưu &amp; tính lại SS/ROP</button>
+    </div>
+  </form>
+
+  <div class="card border-emerald-200 bg-emerald-50/60 p-5 text-[12.5px] leading-relaxed text-emerald-950">
+    <p class="mb-2 font-semibold">Công thức (cho mỗi sản phẩm đang bán)</p>
+    <ul class="list-disc space-y-1 pl-5">
+      <li><b>d</b>, <b>σd</b>: trung bình và độ lệch chuẩn nhu cầu/ngày (ngày không bán = 0).</li>
+      <li><b>LT</b>: trung bình (ngày xác nhận − ngày tạo) của 5 phiếu nhập gần nhất có sản phẩm, tối thiểu 1 ngày.</li>
+      <li><b>Z</b> = NormalDist().inv_cdf(mức phục vụ).</li>
+      <li><b>SS</b> = Z × σd × √LT · <b>ROP</b> = d × LT + SS (làm tròn lên).</li>
+      <li><b>Gợi ý đặt</b> = max(0, d × (LT + chu kỳ) + SS − tồn).</li>
+      <li>Lần bán đầu tiên chưa đủ 30 ngày → “Chưa đủ dữ liệu”: SS trống, ROP = ngưỡng tối thiểu.</li>
+    </ul>
+    <p class="mb-1 mt-4 font-semibold">Cảnh báo tồn kho</p>
+    <ul class="list-disc space-y-1 pl-5">
+      <li>Tồn = 0 → <b class="text-red-600">Hết hàng</b></li>
+      <li>0 &lt; Tồn ≤ SS → <b class="text-red-600">Dưới mức an toàn</b></li>
+      <li>SS &lt; Tồn ≤ ROP → <b class="text-orange-600">Cần đặt hàng</b></li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

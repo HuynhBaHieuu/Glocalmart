@@ -1,12 +1,14 @@
 from django.urls import path
 
-from .views import auth, baocao, catalog, dashboard, kiemke, nhap, taikhoan, xuat
+from .views import auth, baocao, catalog, dashboard, kiemke, nhap, taikhoan, tonkho, xuat
 
 urlpatterns = [
     path("login/", auth.login_view, name="login"),
     path("logout/", auth.logout_view, name="logout"),
     path("", dashboard.dashboard, name="dashboard"),
     path("canh-bao/xuat-excel/", dashboard.dashboard_export, name="dashboard_export"),
+    path("ton-kho/tinh-lai-ss-rop/", tonkho.tinh_lai_ss_rop, name="tinh_lai_ss_rop"),
+    path("ton-kho/cau-hinh/", tonkho.cau_hinh_ton_kho, name="cau_hinh_ton_kho"),
 
     # danh mục
     path("danh-muc/", catalog.danh_muc_list, name="danh_muc"),

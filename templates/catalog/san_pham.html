@@ -49,8 +49,9 @@
       </select>
       <select name="cb" class="input w-auto" onchange="this.form.submit()">
         <option value="">Tất cả mức tồn</option>
-        <option value="het" {% if cb == 'het' %}selected{% endif %}>Đã hết hàng</option>
-        <option value="sap_het" {% if cb == 'sap_het' %}selected{% endif %}>Sắp hết hàng</option>
+        <option value="het" {% if cb == 'het' %}selected{% endif %}>Hết hàng</option>
+        <option value="duoi_an_toan" {% if cb == 'duoi_an_toan' %}selected{% endif %}>Dưới mức an toàn (≤ SS)</option>
+        <option value="can_dat" {% if cb == 'can_dat' %}selected{% endif %}>Cần đặt hàng (≤ ROP)</option>
       </select>
       <span class="ml-auto text-[12px] text-gray-500"><b class="text-gray-800">{{ page.paginator.count }}</b> sản phẩm</span>
     </form>
@@ -81,7 +82,7 @@
           <td class="text-right font-medium">{{ s.gia_ban|money }}</td>
           <td class="text-right">
             <span class="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[12px]
-              {% if s.muc_ton == 'HET_HANG' %}border-red-200 bg-red-50 text-red-600{% elif s.muc_ton == 'SAP_HET' %}border-orange-200 bg-orange-50 text-orange-600{% else %}border-gray-200 bg-gray-50 text-gray-700{% endif %}">
+              {% if s.muc_ton == 'HET_HANG' or s.muc_ton == 'DUOI_AN_TOAN' %}border-red-200 bg-red-50 text-red-600{% elif s.muc_ton == 'CAN_DAT_HANG' %}border-orange-200 bg-orange-50 text-orange-600{% else %}border-gray-200 bg-gray-50 text-gray-700{% endif %}">
               <i data-lucide="lock" class="h-3 w-3 opacity-60"></i>{{ s.ton_kho|qty }}</span>
           </td>
           <td>{% if s.trang_thai %}{% dot_badge True "Đang bán" %}{% else %}{% dot_badge False "" "Ngừng bán" %}{% endif %}</td>
@@ -148,6 +149,27 @@
           <dl class="space-y-2.5 text-[13px]">
             <div class="flex justify-between"><dt class="text-gray-500">Số lượng tồn hiện tại</dt><dd class="flex items-center gap-1 font-semibold text-brand-700"><i data-lucide="lock" class="h-3 w-3"></i>{{ xem.ton_kho|qty }} {{ xem.don_vi }}</dd></div>
             <div class="flex justify-between"><dt class="text-gray-500">Ngưỡng tối thiểu</dt><dd>{{ xem.nguong_toi_thieu|qty }} {{ xem.don_vi }}</dd></div>
+          </dl>
+        </section>
+        <section class="border-b px-6 py-4">
+          <p class="mb-3 flex items-center justify-between text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Tồn kho an toàn &amp; điểm đặt hàng
+            {% if xem.ngay_tinh_rop and not xem.du_du_lieu_ss %}<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-amber-700">Chưa đủ dữ liệu</span>{% endif %}</p>
+          {% if xem.ngay_tinh_rop %}
+          <dl class="space-y-2 text-[13px]">
+            <div class="flex justify-between"><dt class="text-gray-500">Nhu cầu TB/ngày (d)</dt><dd>{{ xem.nhu_cau_tb|qty }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Độ lệch chuẩn nhu cầu (σd)</dt><dd>{{ xem.do_lech_nhu_cau|qty }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Lead time (LT)</dt><dd>{{ xem.lead_time|qty }} ngày</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Tồn kho an toàn (SS)</dt><dd class="font-semibold">{% if xem.ss is not None %}{{ xem.ss|qty }} {{ xem.don_vi }}{% else %}—{% endif %}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Điểm đặt hàng lại (ROP)</dt><dd class="font-semibold">{{ xem.rop|qty }} {{ xem.don_vi }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Gợi ý đặt hàng</dt><dd class="font-semibold text-brand-700">{{ xem_goi_y|qty }} {{ xem.don_vi }}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Ngày tính</dt><dd>{{ xem.ngay_tinh_rop|dt }}</dd></div>
+          </dl>
+          {% if not xem.du_du_lieu_ss %}<p class="mt-2 text-[11px] text-gray-400">Lần bán đầu tiên chưa đủ 30 ngày nên chưa tính SS; ROP tạm bằng ngưỡng tối thiểu.</p>{% endif %}
+          {% else %}<p class="text-[12px] text-gray-400">Chưa tính SS/ROP — hệ thống tính hằng ngày (Admin có thể bấm “Tính lại SS/ROP” ở Dashboard).</p>{% endif %}
+        </section>
+        <section class="border-b px-6 py-4">
+          <p class="mb-3 text-[10.5px] font-semibold uppercase tracking-wider text-gray-400">Hạn sử dụng</p>
+          <dl class="space-y-2.5 text-[13px]">
             <div class="flex justify-between"><dt class="text-gray-500">Hạn sử dụng</dt><dd>{{ xem.han_su_dung|d }}{% if xem.so_ngay_con_lai is not None %} <span class="text-[11px] text-gray-400">({{ xem.so_ngay_con_lai }} ngày)</span>{% endif %}</dd></div>
             <div class="flex justify-between"><dt class="text-gray-500">Cảnh báo HSD trước</dt><dd>{{ xem.so_ngay_canh_bao }} ngày</dd></div>
           </dl>
