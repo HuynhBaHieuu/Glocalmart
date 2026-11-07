@@ -1,4 +1,6 @@
 """Kiểm kê mù 2 bước: DANG_KIEM (đếm lần 1 → lần 2 cho dòng lệch) → CHO_DUYET → HOAN_THANH / BI_TU_CHOI."""
+from decimal import Decimal
+
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Q
@@ -9,7 +11,7 @@ from django.views.decorators.http import require_POST
 from ..decorators import admin_required
 from ..models import AuditLog, ChiTietPhieuKiemKe, DanhMuc, PhieuKiemKe, SanPham
 from ..services import NghiepVuError, audit, dem_lai, duyet_kiem_ke, ghi_dem, gui_duyet, next_doc_code, \
-    tu_choi_kiem_ke
+    nhom_hsd_lo, tu_choi_kiem_ke
 from .common import paginate, products_json, to_date, to_decimal
 
 
@@ -94,9 +96,41 @@ def kiem_create(request):
     return render(request, "kiemke/create.html", ctx)
 
 
+def _nhan_hsd(hsd):
+    return hsd.strftime("%d/%m/%Y") if hsd else "Không có HSD"
+
+
+def _hien_sl_lo(phieu, an_he_thong):
+    return phieu.trang_thai in (PhieuKiemKe.DANG_KIEM, PhieuKiemKe.CHO_DUYET) and not an_he_thong
+
+
+def _bang_phan_ra(phieu, chi_tiet, an_he_thong):
+    """Bảng phân rã HSD cho các dòng lệch: hạn hệ thống đang ghi nhận (lô còn hàng) + hạn nhân viên đã khai thêm.
+    Khi nhân viên còn đang kiểm (đếm mù) chỉ lộ HẠN, không lộ số lượng từng lô."""
+    hien_ht = _hien_sl_lo(phieu, an_he_thong)
+    bang = []
+    for ct in chi_tiet:
+        if not ct.sl_chenh_lech:
+            continue
+        da_nhap = {r.han_su_dung: r.so_luong for r in ct.phan_ra.all()}
+        he_thong = nhom_hsd_lo(ct.id_sp_id) if phieu.trang_thai != PhieuKiemKe.HOAN_THANH else []
+        dong = [{"hsd": h.isoformat() if h else "none", "nhan": _nhan_hsd(h), "he_thong": True,
+                 "sl_ht": int(sl) if hien_ht else None,
+                 "sl": int(da_nhap.pop(h)) if h in da_nhap else ""} for h, sl in he_thong]
+        them = [{"hsd": h.isoformat() if h else "", "khong": h is None, "nhan": _nhan_hsd(h), "he_thong": False,
+                 "sl_ht": 0 if hien_ht else None, "sl": int(sl)} for h, sl in da_nhap.items()]
+        bang.append({"ct": ct.pk, "ma_sp": ct.id_sp.ma_sp, "ten": ct.id_sp.ten_sp, "don_vi": ct.don_vi,
+                     "tong": int(ct.sl_dem_thuc_te or 0), "can": ct.can_phan_ra, "dong": dong, "them": them,
+                     "goi_y": ", ".join(f"Lô HSD {d['nhan']}" for d in dong)})
+        if hien_ht:
+            for d in dong + them:
+                d["lech"] = (d["sl"] or 0) - d["sl_ht"]
+    return bang
+
+
 def kiem_detail(request, ma):
     phieu = get_object_or_404(PhieuKiemKe.objects.select_related("nguoi_tao", "nguoi_duyet"), pk=ma)
-    chi_tiet = list(phieu.chi_tiet.select_related("id_sp"))
+    chi_tiet = list(phieu.chi_tiet.select_related("id_sp").prefetch_related("phan_ra"))
     user = request.user
     if phieu.trang_thai == PhieuKiemKe.DANG_KIEM and not phieu.da_dem_lan_1:
         mode = "dem_lan_1"
@@ -110,12 +144,17 @@ def kiem_detail(request, ma):
     an_he_thong = phieu.trang_thai == PhieuKiemKe.DANG_KIEM and not user.is_admin
     tong_thieu = sum((ct.gia_tri_chenh_lech for ct in chi_tiet if ct.sl_chenh_lech < 0), 0)
     tong_thua = sum((ct.gia_tri_chenh_lech for ct in chi_tiet if ct.sl_chenh_lech > 0), 0)
+    phan_ra = _bang_phan_ra(phieu, chi_tiet, an_he_thong)
     return render(request, "kiemke/detail.html", {
         "active": "kiem_ke",
         "p": phieu,
         "chi_tiet": chi_tiet,
         "dong_lech": [ct for ct in chi_tiet if ct.co_chenh_lech],
-        "dong_thua": [ct for ct in chi_tiet if ct.sl_thua > 0],
+        "phan_ra": phan_ra,
+        # bảng nhập phân rã chỉ hiện khi đã đếm xong và đang ở bước gửi duyệt
+        "phan_ra_sua": mode == "xem" and phieu.trang_thai == PhieuKiemKe.DANG_KIEM and any(it["can"] for it in phan_ra),
+        "hien_sl_lo": _hien_sl_lo(phieu, an_he_thong),
+        "chua_phan_ra": [ct.id_sp.ten_sp for ct in chi_tiet if ct.can_phan_ra and not ct.da_phan_ra],
         "mode": mode,
         "an_he_thong": an_he_thong,
         "tong_thieu": tong_thieu,
@@ -153,15 +192,29 @@ def kiem_dem(request, ma):
 @require_POST
 def kiem_gui_duyet(request, ma):
     phieu = get_object_or_404(PhieuKiemKe, pk=ma)
-    # hạn sử dụng nhân viên nhập tay cho phần hàng thừa (sẽ thành lô mới khi được duyệt)
-    hsd_thua = {}
-    for ct in phieu.chi_tiet.all():
-        if request.POST.get(f"khong_hsd_{ct.pk}"):
-            hsd_thua[ct.pk] = None
-        elif to_date(request.POST.get(f"hsd_thua_{ct.pk}")):
-            hsd_thua[ct.pk] = to_date(request.POST.get(f"hsd_thua_{ct.pk}"))
     try:
-        gui_duyet(phieu, hsd_thua)
+        # phân rã HSD của dòng lệch: các cặp (pr_hsd_<ct>, pr_sl_<ct>); hsd = "none" → hàng không có hạn
+        phan_ra = {}
+        for ct in phieu.chi_tiet.select_related("id_sp"):
+            hsds, sls = request.POST.getlist(f"pr_hsd_{ct.pk}"), request.POST.getlist(f"pr_sl_{ct.pk}")
+            if not hsds:
+                continue
+            dong = []
+            for h, s in zip(hsds, sls):
+                sl = to_decimal(s) if s.strip() else Decimal(0)
+                if sl is None:
+                    raise NghiepVuError(f"{ct.id_sp.ten_sp}: số lượng theo hạn sử dụng không hợp lệ.")
+                if h == "none":
+                    hsd = None
+                else:
+                    hsd = to_date(h)
+                    if hsd is None:
+                        if sl:
+                            raise NghiepVuError(f"{ct.id_sp.ten_sp}: chọn hạn sử dụng (hoặc “Không có HSD”) cho dòng hạn mới.")
+                        continue
+                dong.append((hsd, sl))
+            phan_ra[ct.pk] = dong
+        gui_duyet(phieu, phan_ra)
         audit(request, "GUI_DUYET", "phieu_kiem_ke", ma)
         messages.success(request, f"Đã gửi phiếu {ma} cho Quản lý duyệt.")
     except NghiepVuError as e:

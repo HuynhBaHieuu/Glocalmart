@@ -491,8 +491,6 @@ class ChiTietPhieuKiemKe(models.Model):
     sl_chenh_lech = models.DecimalField(**QTY, default=0)
     don_vi = models.CharField(max_length=30)
     ghi_chu = models.CharField(max_length=255, blank=True, default="")
-    hsd_thua_da_khai_bao = models.BooleanField(default=False)
-    han_su_dung_thua = models.DateField(null=True, blank=True)  # NULL + đã khai báo = hàng không có HSD
 
     class Meta:
         db_table = "chi_tiet_phieu_kiem_ke"
@@ -503,12 +501,37 @@ class ChiTietPhieuKiemKe(models.Model):
         return self.sl_dem_lan_2 if self.sl_dem_lan_2 is not None else self.sl_dem_lan_1
 
     @property
+    def can_phan_ra(self):
+        """Dòng lệch (sau lần đếm cuối) → bắt buộc phân rã số đếm thực tế theo hạn sử dụng trước khi gửi duyệt."""
+        return bool(self.sl_chenh_lech) and (self.sl_dem_thuc_te or 0) > 0
+
+    @property
+    def da_phan_ra(self):
+        return sum((r.so_luong for r in self.phan_ra.all()), Decimal(0)) == (self.sl_dem_thuc_te or 0)
+
+    @property
     def gia_tri_chenh_lech(self):
         return (self.sl_chenh_lech or 0) * (self.gia_von or 0)
 
     @property
     def sl_thua(self):
         return self.sl_chenh_lech if self.sl_chenh_lech and self.sl_chenh_lech > 0 else 0
+
+
+class PhanRaHsdKiemKe(models.Model):
+    """Số lượng thực tế của 1 dòng kiểm kê lệch, chia theo hạn sử dụng in trên bao bì.
+
+    Khi duyệt: các lô cùng hạn bị GHI ĐÈ về đúng số này (thực tế là chân lý); hạn chưa có lô nào → lô mới.
+    han_su_dung NULL = hàng không có hạn sử dụng.
+    """
+    ct_kiem = models.ForeignKey(ChiTietPhieuKiemKe, on_delete=models.CASCADE, related_name="phan_ra",
+                                db_column="id_chi_tiet_kiem")
+    han_su_dung = models.DateField(null=True, blank=True)
+    so_luong = models.DecimalField(**QTY)
+
+    class Meta:
+        db_table = "phan_ra_hsd_kiem_ke"
+        ordering = [models.F("han_su_dung").asc(nulls_last=True), "id"]
 
 
 # ---------------------------------------------------------------- NHAT_KY_KHO
