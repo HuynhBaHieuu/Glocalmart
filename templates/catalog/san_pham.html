@@ -4,11 +4,9 @@
 {% block content %}
 {{ modal|json_script:"modal-data" }}
 <div x-data="crud({ ma_sp: '{{ goi_y_ma }}', ten_sp: '', mo_ta: '', id_danhmuc: '', don_vi: '', gia_ban: '', nguong_toi_thieu: '10', han_su_dung: '', so_ngay_canh_bao: '30', anh_sp: '', gia_von: 0, ton_kho: 0, trang_thai: 1 })">
-  <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <span class="font-medium text-brand-700">Sản phẩm</span></nav>
   <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
     <div>
-      <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Sản phẩm <span class="text-[12px] font-normal text-gray-500">Product Management</span></h1>
-      <p class="mt-1 text-[13px] text-gray-500">Quản lý thông tin, giá bán và trạng thái kinh doanh của sản phẩm.</p>
+      <h1 class="flex items-baseline gap-3 text-[26px] font-semibold tracking-tight text-gray-900">Quản lý Sản phẩm</h1>
     </div>
     {% if user.is_admin %}<button class="btn btn-primary" @click="create()"><i data-lucide="plus"></i>Thêm sản phẩm mới</button>{% endif %}
   </div>
@@ -55,9 +53,6 @@
       </select>
       <span class="ml-auto text-[12px] text-gray-500"><b class="text-gray-800">{{ page.paginator.count }}</b> sản phẩm</span>
     </form>
-    <div class="flex items-center gap-2 border-y border-brand-100 bg-brand-50/60 px-5 py-2 text-[11.5px] text-gray-600">
-      <i data-lucide="lock" class="h-3.5 w-3.5 text-brand-700"></i><b class="text-brand-800">Tồn kho chỉ đọc.</b> Số lượng chỉ được cập nhật qua nghiệp vụ nhập, xuất và kiểm kê — không chỉnh sửa tại sản phẩm.
-    </div>
     <div class="overflow-x-auto">
       <table class="tbl">
         <thead><tr>
@@ -103,7 +98,6 @@
       </table>
     </div>
     {% include "partials/pagination.html" with unit="sản phẩm" %}
-    <div class="border-t bg-gray-50 px-5 py-2.5 text-[11px] text-gray-500">Ngừng kinh doanh là xóa mềm: sản phẩm và lịch sử giao dịch được giữ lại, có thể khôi phục bất cứ lúc nào.</div>
   </div>
 
   {# dữ liệu từng dòng cho modal sửa #}

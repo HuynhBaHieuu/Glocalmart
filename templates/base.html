@@ -81,7 +81,7 @@
       <button class="rounded-lg p-2 hover:bg-gray-100 lg:hidden" @click="sidebar=true"><i data-lucide="menu" class="h-5 w-5"></i></button>
       <form action="/san-pham/" class="relative hidden w-full max-w-sm md:block">
         <i data-lucide="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"></i>
-        <input name="q" placeholder="Tìm kiếm sản phẩm trong Warehouse MS..." class="h-9 w-full rounded-lg border-gray-200 bg-gray-50 pl-9 pr-12 text-[13px] focus:border-brand-500 focus:ring-brand-500">
+        <input name="q" class="h-9 w-full rounded-lg border-gray-200 bg-gray-50 pl-9 pr-12 text-[13px] focus:border-brand-500 focus:ring-brand-500">
         <kbd class="absolute right-2.5 top-1/2 -translate-y-1/2 rounded border border-gray-200 bg-white px-1.5 text-[10px] text-gray-400">↵</kbd>
       </form>
       <div class="ml-auto flex items-center gap-3">
@@ -121,8 +121,7 @@
       {% block breadcrumb %}{% endblock %}
       {% block content %}{% endblock %}
     </main>
-    <footer class="flex flex-wrap justify-between gap-2 px-4 pb-5 text-[11px] text-gray-400 lg:px-8">
-      <span>Warehouse MS · Quản lý tập trung, vận hành chính xác.</span>
+    <footer class="flex flex-wrap justify-end gap-2 px-4 pb-5 text-[11px] text-gray-400 lg:px-8">
       <span>G'Local Mart &amp; Cafe © {% now "Y" %}</span>
     </footer>
   </div>
