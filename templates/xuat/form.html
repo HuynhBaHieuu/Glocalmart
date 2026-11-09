@@ -4,7 +4,7 @@
 {% block content %}
 {{ products|json_script:"products-data" }}
 {{ old|json_script:"old-data" }}
-<div x-data="phieuXuat()" x-init="init()">
+<div x-data="phieuXuat()">
   <nav class="mb-1 text-[11.5px] text-gray-400">Xuất kho <span class="mx-1">/</span> <span class="font-medium text-brand-700">{% if p %}Sửa phiếu xuất{% else %}Lập phiếu xuất{% endif %}</span></nav>
   <h1 class="mb-5 text-[22px] font-semibold text-gray-900">{% if p %}Sửa phiếu xuất {{ p.pk }}{% else %}Lập phiếu xuất kho{% endif %}</h1>
 
@@ -13,12 +13,16 @@
     <div class="card space-y-5 p-5">
       <div class="flex items-start justify-between">
         <div><h3 class="text-[15px] font-semibold">Thông tin phiếu xuất</h3><p class="text-[12px] text-gray-500">Chọn lý do, sản phẩm và số lượng cần xuất kho.</p></div>
+        {% if p %}
+        <span class="rounded-full bg-sky-50 px-2.5 py-0.5 text-[11px] font-medium text-sky-700 ring-1 ring-sky-200">Đang sửa · {{ p.get_trang_thai_display }}</span>
+        {% else %}
         <span class="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">Phiếu mới</span>
+        {% endif %}
       </div>
       <div class="grid gap-4 sm:grid-cols-3">
         <div><label class="label">Mã phiếu xuất</label><div class="relative"><input class="input" value="{{ ma_du_kien }}" readonly><span class="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Tự động</span></div></div>
-        <div><label class="label">Ngày lập</label><input class="input" value="{{ today|d }}" readonly></div>
-        <div><label class="label">Người lập</label><input class="input" value="{{ user.ho_ten }}" readonly></div>
+        <div><label class="label">Ngày lập</label><input class="input" value="{% if p %}{{ p.ngay_tao|d }}{% else %}{{ today|d }}{% endif %}" readonly></div>
+        <div><label class="label">Người lập</label><input class="input" value="{% if p %}{{ p.nguoi_tao.ho_ten }}{% else %}{{ user.ho_ten }}{% endif %}" readonly></div>
       </div>
 
       <div>

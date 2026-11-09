@@ -4,7 +4,7 @@
 {% block content %}
 {{ products|json_script:"products-data" }}
 {{ old|json_script:"old-data" }}
-<div x-data="phieuNhap()" x-init="init()">
+<div x-data="phieuNhap()">
   <div class="mb-5 flex items-center gap-3">
     <a href="{% url 'nhap' %}" class="grid h-8 w-8 place-items-center rounded-full border bg-white hover:bg-gray-50"><i data-lucide="chevron-left" class="h-4 w-4"></i></a>
     <div>

@@ -545,26 +545,32 @@ def nhom_hsd_lo(san_pham_id):
     return list(nhom.items())
 
 
-def _kiem_tra_phan_ra(ct, dong):
-    """dong: list[(hsd|None, Decimal)] → {hsd: tổng} đã gộp hạn trùng, bỏ dòng 0. Tổng phải = SL thực tế."""
+def _kiem_tra_hsd_thua(ct, dong):
+    """dong: list[(hsd, Decimal)] của phần hàng thừa → {hsd: tổng} đã gộp hạn trùng, bỏ dòng 0.
+    Mỗi dòng phải có HSD; tổng phải đúng bằng số lượng thừa."""
     gop = {}
     for hsd, sl in dong:
         if sl is None or sl < 0 or not la_so_nguyen(sl):
             raise NghiepVuError(f"{ct.id_sp.ten_sp}: số lượng theo từng hạn sử dụng phải là số nguyên ≥ 0.")
-        if sl > 0:
-            gop[hsd] = gop.get(hsd, Decimal(0)) + sl
+        if sl == 0:
+            continue
+        if hsd is None:
+            raise NghiepVuError(f"{ct.id_sp.ten_sp}: nhập hạn sử dụng cho hàng thừa, hoặc chọn “Không nhập HSD” "
+                                "và ghi lý do.")
+        gop[hsd] = gop.get(hsd, Decimal(0)) + sl
     tong = sum(gop.values(), Decimal(0))
-    if tong != ct.sl_dem_thuc_te:
-        raise NghiepVuError(f"{ct.id_sp.ten_sp}: tổng phân rã theo HSD là {fmt(tong)} {ct.don_vi}, phải bằng đúng "
-                            f"số đếm thực tế {fmt(ct.sl_dem_thuc_te)} {ct.don_vi}.")
+    if tong != ct.sl_chenh_lech:
+        raise NghiepVuError(f"{ct.id_sp.ten_sp}: tổng số lượng theo HSD là {fmt(tong)} {ct.don_vi}, phải bằng đúng "
+                            f"số hàng thừa {fmt(ct.sl_chenh_lech)} {ct.don_vi}.")
     return gop
 
 
-def gui_duyet(phieu: PhieuKiemKe, phan_ra=None):
-    """Gửi duyệt. phan_ra: {id_chi_tiet: [(hsd|None, số lượng)]} — với mỗi dòng LỆCH, nhân viên nhặt hàng lên xem bao bì
-    và nhập số lượng thực tế của từng hạn sử dụng (hạn mới / không có HSD cũng được) sao cho đủ tổng số đếm.
-    Chưa phân rã đủ cho mọi dòng lệch → không được gửi duyệt."""
-    phan_ra = phan_ra or {}
+def gui_duyet(phieu: PhieuKiemKe, khai_bao=None):
+    """Gửi duyệt. Hàng THIẾU không cần nhập HSD. Mỗi dòng THỪA phải khai một trong hai:
+    - {"dong": [(hsd, số lượng)]}: HSD in trên bao bì của phần hàng thừa, tổng = số thừa;
+    - {"khong_hsd": True, "ly_do": "..."}: không nhập HSD (bắt buộc lý do) → khi duyệt cộng vào lô HSD cũ nhất.
+    khai_bao: {id_chi_tiet: dict như trên}."""
+    khai_bao = khai_bao or {}
     if phieu.trang_thai != PhieuKiemKe.DANG_KIEM:
         raise NghiepVuError("Phiếu không ở trạng thái đang kiểm.")
     if not phieu.da_dem_lan_1:
@@ -574,61 +580,79 @@ def gui_duyet(phieu: PhieuKiemKe, phan_ra=None):
     with transaction.atomic():
         thieu = []
         for ct in phieu.chi_tiet.select_related("id_sp").prefetch_related("phan_ra"):
-            if not ct.can_phan_ra:
+            if not ct.can_khai_hsd:
                 ct.phan_ra.all().delete()
+                if ct.ly_do_khong_hsd:
+                    ct.ly_do_khong_hsd = None
+                    ct.save(update_fields=["ly_do_khong_hsd"])
                 continue
-            if ct.pk in phan_ra:
-                gop = _kiem_tra_phan_ra(ct, phan_ra[ct.pk])
+            kb = khai_bao.get(ct.pk)
+            if kb is None:
+                if not ct.da_khai_hsd:
+                    thieu.append(ct.id_sp.ten_sp)
+                continue
+            if kb.get("khong_hsd"):
+                ly_do = (kb.get("ly_do") or "").strip()
+                if not ly_do:
+                    raise NghiepVuError(f"{ct.id_sp.ten_sp}: ghi lý do không nhập hạn sử dụng cho hàng thừa.")
+                ct.phan_ra.all().delete()
+                ct.ly_do_khong_hsd = ly_do[:255]
+            else:
+                gop = _kiem_tra_hsd_thua(ct, kb.get("dong") or [])
                 ct.phan_ra.all().delete()
                 PhanRaHsdKiemKe.objects.bulk_create(
                     [PhanRaHsdKiemKe(ct_kiem=ct, han_su_dung=h, so_luong=sl) for h, sl in gop.items()])
-            elif not ct.da_phan_ra:
-                thieu.append(ct.id_sp.ten_sp)
+                ct.ly_do_khong_hsd = None
+            ct.save(update_fields=["ly_do_khong_hsd"])
         if thieu:
-            raise NghiepVuError("Bắt buộc phân rã hạn sử dụng cho sản phẩm lệch: " + ", ".join(thieu) + ".")
+            raise NghiepVuError("Nhập hạn sử dụng (hoặc chọn không nhập HSD kèm lý do) cho hàng thừa: "
+                                + ", ".join(thieu) + ".")
         phieu.trang_thai = PhieuKiemKe.CHO_DUYET
         phieu.ngay_gui_duyet = timezone.now()
         phieu.save(update_fields=["trang_thai", "ngay_gui_duyet"])
 
 
-def _ghi_de_lo_theo_phan_ra(phieu, ct, sp, user):
-    """Ghi đè số lượng các lô của sản phẩm theo bảng phân rã HSD (thực tế là chân lý):
-    - lô có hạn nằm trong bảng: chia lại đúng số thực tế của hạn đó (nhiều lô cùng hạn → lô nhập cũ về 0 trước,
-      phần dư dồn vào lô nhập mới nhất);
-    - lô có hạn KHÔNG nằm trong bảng: về 0;
-    - hạn trong bảng chưa có lô nào còn hàng: tạo lô mới trong phiếu hệ thống PN-<mã phiếu kiểm>.
-    Tổng các lô sau khi ghi đè = SL thực tế."""
-    con = {r.han_su_dung: r.so_luong for r in ct.phan_ra.all()}
-    theo_han = {}
-    for lo in lo_con_hang_qs(sp.pk):
-        theo_han.setdefault(lo.han_su_dung, []).append(lo)
-    for hsd, lots in theo_han.items():
-        can = con.pop(hsd, Decimal(0))
-        moi_nhat_truoc = lots[::-1]  # lots theo FEFO: cùng hạn thì lô nhập trước đứng trước
-        moi = {}
-        for lo in moi_nhat_truoc:
-            moi[lo.pk] = min(can, lo.so_luong_con_lai)
-            can -= moi[lo.pk]
-        moi[moi_nhat_truoc[0].pk] += can  # vượt tổng các lô cùng hạn → dồn vào lô nhập mới nhất
-        for lo in lots:
-            if lo.so_luong_con_lai != moi[lo.pk]:
-                lo.so_luong_con_lai = moi[lo.pk]
-                lo.save(update_fields=["so_luong_con_lai"])
-    for hsd, sl in con.items():
-        if sl <= 0:
-            continue
-        lo_phieu = _phieu_he_thong(f"PN-{phieu.pk}", user, f"Lô hàng phát hiện khi kiểm kê {phieu.pk} (không khớp lô nào).")
-        ChiTietPhieuNhap.objects.create(
-            ma_phieu_nhap=lo_phieu, id_sp=sp, so_luong_dat=sl, don_gia_nhap=sp.gia_von,
-            so_luong_thuc_nhan=sl, so_luong_con_lai=sl, han_su_dung=hsd,
-            ghi_chu_doi_soat=f"Phân rã HSD kiểm kê {phieu.pk}",
-        )
+def _lo_moi_kiem_ke(phieu, sp, hsd, sl, user):
+    lo_phieu = _phieu_he_thong(f"PN-{phieu.pk}", user, f"Hàng thừa phát hiện khi kiểm kê {phieu.pk}.")
+    return ChiTietPhieuNhap.objects.create(
+        ma_phieu_nhap=lo_phieu, id_sp=sp, so_luong_dat=sl, don_gia_nhap=sp.gia_von,
+        so_luong_thuc_nhan=sl, so_luong_con_lai=sl, han_su_dung=hsd,
+        ghi_chu_doi_soat=f"Hàng thừa kiểm kê {phieu.pk}",
+    )
+
+
+def _cong_lo_theo_hsd(phieu, sp, hsd, sl, user):
+    """Cộng hàng thừa có HSD vào lô còn hàng cùng hạn (lô nhập mới nhất); chưa có lô cùng hạn → tạo lô mới."""
+    lots = [lo for lo in lo_con_hang_qs(sp.pk) if lo.han_su_dung == hsd]
+    if not lots:
+        return _lo_moi_kiem_ke(phieu, sp, hsd, sl, user)
+    lo = lots[-1]
+    lo.so_luong_con_lai += sl
+    lo.save(update_fields=["so_luong_con_lai"])
+    return lo
+
+
+def lo_hsd_cu_nhat(san_pham_id):
+    """Lô còn hàng có hạn sử dụng cũ nhất (thứ tự FEFO) — nơi nhận hàng thừa không nhập HSD."""
+    return lo_con_hang_qs(san_pham_id).first()
+
+
+def _cong_lo_cu_nhat(phieu, sp, sl, user):
+    lo = lo_hsd_cu_nhat(sp.pk)
+    if lo is None:  # không còn lô nào → lô mới không có HSD
+        return _lo_moi_kiem_ke(phieu, sp, None, sl, user)
+    lo.so_luong_con_lai += sl
+    lo.save(update_fields=["so_luong_con_lai"])
+    return lo
 
 
 def duyet_kiem_ke(ma_phieu, user):
     """Xác nhận & cân bằng tồn kho về SL thực tế, ghi NHAT_KY_KHO.
 
-    Dòng lệch → ghi đè từng lô theo bảng phân rã HSD. Dòng khớp lúc đếm nhưng tồn đã giảm sau đó → trừ FEFO.
+    - Thiếu → tự xuất phần thiếu theo lô có HSD cũ nhất trước (FEFO).
+    - Thừa → tự nhập phần thừa: theo HSD nhân viên khai (cộng vào lô cùng hạn / tạo lô mới); không nhập HSD →
+      cộng vào lô có HSD cũ nhất hiện có.
+    Phần chênh được tính lại theo tồn lúc duyệt (tồn có thể đã đổi sau khi đếm).
     """
     with transaction.atomic():
         phieu = PhieuKiemKe.objects.select_for_update().get(pk=ma_phieu)
@@ -636,18 +660,25 @@ def duyet_kiem_ke(ma_phieu, user):
             raise NghiepVuError("Chỉ duyệt được phiếu đang chờ duyệt.")
         for ct in phieu.chi_tiet.select_related("id_sp").prefetch_related("phan_ra"):
             sp = SanPham.objects.select_for_update().get(pk=ct.id_sp_id)
-            if ct.sl_chenh_lech:
-                if ct.can_phan_ra and not ct.da_phan_ra:
-                    raise NghiepVuError(f"{sp.ten_sp}: chưa phân rã hạn sử dụng đủ {fmt(ct.sl_dem_thuc_te)} {sp.don_vi} "
-                                        "— hãy từ chối phiếu để nhân viên phân rã lại.")
-                _ghi_de_lo_theo_phan_ra(phieu, ct, sp, user)
-            else:
-                lech = ct.sl_dem_thuc_te - max(sp.ton_kho, Decimal(0))
-                if lech < 0:
-                    tru_ton_fefo(sp.pk, -lech)
-                elif lech > 0:
+            lech = ct.sl_dem_thuc_te - max(sp.ton_kho, Decimal(0))
+            if lech < 0:
+                tru_ton_fefo(sp.pk, -lech)
+            elif lech > 0:
+                if not ct.can_khai_hsd:
                     raise NghiepVuError(f"{sp.ten_sp}: tồn kho đã thay đổi sau khi đếm (thừa {fmt(lech)} {sp.don_vi} "
                                         "chưa rõ hạn sử dụng) — hãy từ chối phiếu để nhân viên đếm lại.")
+                if not ct.da_khai_hsd:
+                    raise NghiepVuError(f"{sp.ten_sp}: hàng thừa chưa được khai hạn sử dụng — hãy từ chối phiếu "
+                                        "để nhân viên bổ sung.")
+                con = lech
+                if not ct.ly_do_khong_hsd:
+                    for r in ct.phan_ra.all():
+                        lay = min(con, r.so_luong)
+                        if lay > 0:
+                            _cong_lo_theo_hsd(phieu, sp, r.han_su_dung, lay, user)
+                            con -= lay
+                if con > 0:
+                    _cong_lo_cu_nhat(phieu, sp, con, user)
             post_stock_move(san_pham_id=sp.pk, loai="KIEM_KE", user=user, set_to=ct.sl_dem_thuc_te, phieu_kiem=phieu)
             cap_nhat_hsd_san_pham(sp.pk)
         phieu.trang_thai = PhieuKiemKe.HOAN_THANH
@@ -675,6 +706,7 @@ def dem_lai(phieu: PhieuKiemKe):
         raise NghiepVuError("Chỉ phiếu bị từ chối mới được đếm lại.")
     ChiTietPhieuKiemKe.objects.filter(ma_phieu_kiem=phieu).update(
         sl_dem_lan_1=None, sl_dem_lan_2=None, sl_he_thong=None, co_chenh_lech=False, sl_chenh_lech=0,
+        ly_do_khong_hsd=None,
     )
     PhanRaHsdKiemKe.objects.filter(ct_kiem__ma_phieu_kiem=phieu).delete()
     phieu.trang_thai = PhieuKiemKe.DANG_KIEM

@@ -5,7 +5,7 @@
 {{ products|json_script:"products-data" }}
 {{ danh_muc|json_script:"dm-data" }}
 {{ old|json_script:"old-data" }}
-<div x-data="kiemKe()" x-init="init()">
+<div x-data="kiemKe()">
   <nav class="mb-1 text-[11.5px] text-gray-400">Quản lý dữ liệu <span class="mx-1">›</span> <a href="{% url 'kiem' %}" class="hover:underline">Kiểm kê</a> <span class="mx-1">›</span> <span class="font-medium text-brand-700">Tạo phiếu</span></nav>
   <h1 class="mb-5 text-[24px] font-semibold text-brand-800">Tạo phiếu kiểm kê</h1>
 
@@ -61,7 +61,6 @@
             </tbody>
           </table>
         </div>
-        <p class="flex items-center gap-2 border-t bg-brand-50/50 px-5 py-3 text-[12px] text-gray-600"><i data-lucide="eye-off" class="h-4 w-4 text-brand-700"></i>Số lượng tồn trên hệ thống sẽ tự động được đối chiếu sau khi lưu — được ẩn trong lúc đếm để tránh đếm thiên lệch.</p>
       </div>
     </div>
 

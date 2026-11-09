@@ -110,6 +110,16 @@ class XuatKhoTest(Base):
         self.sp.refresh_from_db()
         self.assertEqual(self.sp.ton_kho, 8)
 
+    def test_sua_phieu_xuat_hien_lai_dung_dong_cu(self):
+        self.nhap(10, 20000)
+        p = self.xuat(5)
+        self.client.force_login(self.nv)
+        r = self.client.get(f"/xuat-kho/{p.pk}/sua/")
+        self.assertEqual(r.context["old"]["items"], [{"id": self.sp.pk, "sl": 5.0}])
+        self.assertContains(r, "Đang sửa")
+        self.assertNotContains(r, "Phiếu mới</span>")
+        self.assertNotContains(r, 'x-init="init()"')        # Alpine tự gọi init() — gọi thêm sẽ nhân đôi dòng
+
 
 class KiemKeTest(Base):
     def test_dem_mu_2_buoc_va_can_bang(self):
@@ -123,9 +133,7 @@ class KiemKeTest(Base):
         with self.assertRaises(NghiepVuError):  # còn dòng lệch chưa đếm lần 2
             gui_duyet(p)
         ghi_dem(p, 2, {ct.pk: D(96)}, {})
-        with self.assertRaisesMessage(NghiepVuError, "Bắt buộc phân rã hạn sử dụng"):
-            gui_duyet(p)
-        gui_duyet(p, {ct.pk: [(None, D(96))]})
+        gui_duyet(p)                                            # hàng thiếu: không cần nhập HSD
         self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
         duyet_kiem_ke(p.pk, self.admin)
         self.sp.refresh_from_db()
@@ -539,65 +547,72 @@ class LoFefoTest(Base):
         ct.refresh_from_db()
         return p, ct
 
-    def test_kiem_ke_thieu_phan_ra_theo_hsd(self):
+    def test_kiem_ke_thieu_tu_xuat_lo_hsd_cu_nhat(self):
         a = self.nhap(30, 20000, hsd=self.ngay(10))
         b = self.nhap(50, 20000, hsd=self.ngay(40))
         p, ct = self.kiem(45)                                   # thiếu 35
-        gui_duyet(p, {ct.pk: [(self.ngay(10), D(0)), (self.ngay(40), D(45))]})
+        self.assertFalse(ct.can_khai_hsd)
+        gui_duyet(p)                                            # hàng thiếu không cần nhập HSD
         duyet_kiem_ke(p.pk, self.admin)
         self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (0, 45))
         self.assertKhopTon()
 
-    def test_phan_ra_hsd_ghi_de_lo_theo_thuc_te(self):
-        """Hệ thống: lô A 50 + lô B 50 = 100. Đếm 105 → phân rã A = 60, B = 45 → ghi đè đúng như vậy."""
+    def test_kiem_ke_thua_bat_buoc_khai_hsd_hoac_ly_do(self):
         a = self.nhap(50, 20000, hsd=self.ngay(25))
         b = self.nhap(50, 20000, hsd=self.ngay(39))
-        p, ct = self.kiem(105)
-        with self.assertRaisesMessage(NghiepVuError, "Bắt buộc phân rã hạn sử dụng"):
+        p, ct = self.kiem(105)                                  # thừa 5
+        with self.assertRaisesMessage(NghiepVuError, "Nhập hạn sử dụng"):
             gui_duyet(p)
-        with self.assertRaisesMessage(NghiepVuError, "phải bằng đúng số đếm thực tế 105"):
-            gui_duyet(p, {ct.pk: [(self.ngay(25), D(50)), (self.ngay(39), D(50))]})
+        with self.assertRaisesMessage(NghiepVuError, "phải bằng đúng số hàng thừa 5"):
+            gui_duyet(p, {ct.pk: {"dong": [(self.ngay(39), D(105))]}})
+        with self.assertRaisesMessage(NghiepVuError, "Không nhập HSD"):
+            gui_duyet(p, {ct.pk: {"dong": [(None, D(5))]}})
+        with self.assertRaisesMessage(NghiepVuError, "ghi lý do"):
+            gui_duyet(p, {ct.pk: {"khong_hsd": True, "ly_do": "  "}})
         self.assertEqual(p.trang_thai, PhieuKiemKe.DANG_KIEM)
-        gui_duyet(p, {ct.pk: [(self.ngay(25), D(60)), (self.ngay(39), D(45))]})
+        gui_duyet(p, {ct.pk: {"dong": [(self.ngay(39), D(5))]}})
         duyet_kiem_ke(p.pk, self.admin)
         self.sp.refresh_from_db()
-        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai, self.sp.ton_kho), (60, 45, 105))
-        self.assertFalse(PhieuNhap.objects.filter(pk=f"PN-{p.pk}").exists())   # không sinh lô mới
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai, self.sp.ton_kho), (50, 55, 105))
+        self.assertFalse(PhieuNhap.objects.filter(pk=f"PN-{p.pk}").exists())   # cùng hạn → cộng vào lô có sẵn
         self.assertKhopTon()
 
-    def test_phan_ra_hsd_moi_tao_lo_va_lo_vang_ve_0(self):
+    def test_kiem_ke_thua_hsd_moi_tao_lo(self):
         from .services import huy_phieu_nhap
         a = self.nhap(30, 20000, hsd=self.ngay(10))
-        p, ct = self.kiem(34)                                   # thực tế toàn hàng hạn khác
-        gui_duyet(p, {ct.pk: [(self.ngay(200), D(34))]})
+        p, ct = self.kiem(34)
+        gui_duyet(p, {ct.pk: {"dong": [(self.ngay(200), D(3)), (self.ngay(10), D(1))]}})
         duyet_kiem_ke(p.pk, self.admin)
         lo_moi = ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}")
-        self.assertEqual((lo_moi.so_luong_con_lai, lo_moi.han_su_dung), (34, self.ngay(200)))
-        self.assertEqual(self.lo(a).so_luong_con_lai, 0)
+        self.assertEqual((lo_moi.so_luong_con_lai, lo_moi.han_su_dung), (3, self.ngay(200)))
+        self.assertEqual(self.lo(a).so_luong_con_lai, 31)
         self.sp.refresh_from_db()
-        self.assertEqual((self.sp.ton_kho, self.sp.han_su_dung), (34, self.ngay(200)))
+        self.assertEqual((self.sp.ton_kho, self.sp.han_su_dung), (34, self.ngay(10)))
         self.assertKhopTon()
         with self.assertRaises(NghiepVuError):                  # phiếu hệ thống không hủy được
             huy_phieu_nhap(f"PN-{p.pk}", self.admin, "x")
 
-    def test_phan_ra_hsd_khong_co_han(self):
-        a = self.nhap(5, 20000)
-        p, ct = self.kiem(7)
-        gui_duyet(p, {ct.pk: [(None, D(7))]})
-        duyet_kiem_ke(p.pk, self.admin)
-        self.assertEqual(self.lo(a).so_luong_con_lai, 7)        # cùng "không có HSD" → ghi đè vào lô cũ
-        self.assertKhopTon()
-
-    def test_phan_ra_nhieu_lo_cung_han_lo_cu_ve_0_truoc(self):
+    def test_kiem_ke_thua_khong_nhap_hsd_vao_lo_cu_nhat(self):
         a = self.nhap(20, 20000, hsd=self.ngay(30))
-        b = self.nhap(20, 20000, hsd=self.ngay(30))
-        p, ct = self.kiem(25)
-        gui_duyet(p, {ct.pk: [(self.ngay(30), D(25))]})
+        b = self.nhap(20, 20000, hsd=self.ngay(10))             # lô có hạn cũ nhất
+        p, ct = self.kiem(43)
+        gui_duyet(p, {ct.pk: {"khong_hsd": True, "ly_do": "Bao bì không in hạn"}})
+        ct.refresh_from_db()
+        self.assertEqual(ct.ly_do_khong_hsd, "Bao bì không in hạn")
         duyet_kiem_ke(p.pk, self.admin)
-        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (5, 20))
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (20, 23))
+        self.assertFalse(PhieuNhap.objects.filter(pk=f"PN-{p.pk}").exists())
         self.assertKhopTon()
 
-    def test_dem_ve_0_khong_can_phan_ra(self):
+    def test_kiem_ke_thua_khong_con_lo_tao_lo_khong_hsd(self):
+        p, ct = self.kiem(3)                                    # hệ thống 0, chưa có lô nào
+        gui_duyet(p, {ct.pk: {"khong_hsd": True, "ly_do": "Hàng mẫu"}})
+        duyet_kiem_ke(p.pk, self.admin)
+        lo_moi = ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}")
+        self.assertEqual((lo_moi.so_luong_con_lai, lo_moi.han_su_dung), (3, None))
+        self.assertKhopTon()
+
+    def test_dem_ve_0_khong_can_khai_hsd(self):
         self.nhap(5, 20000, hsd=self.ngay(30))
         p, _ = self.kiem(0)
         gui_duyet(p)
@@ -606,29 +621,65 @@ class LoFefoTest(Base):
         self.assertEqual(self.sp.ton_kho, 0)
         self.assertKhopTon()
 
-    def test_view_phan_ra_khoa_gui_duyet_va_luu(self):
+    def test_view_hang_thieu_khong_hien_bang_hsd(self):
+        a = self.nhap(30, 20000, hsd=self.ngay(10))
+        b = self.nhap(50, 20000, hsd=self.ngay(40))
+        p, ct = self.kiem(45)
+        self.client.force_login(self.nv)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertFalse(r.context["hsd_sua"])
+        self.assertNotContains(r, "Hạn sử dụng hàng thừa")
+        self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/")
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertEqual(r.context["bang_hsd"][0]["du_kien"],
+                         [{"nhan": self.ngay(10).strftime("%d/%m/%Y"), "sl": 30},
+                          {"nhan": self.ngay(40).strftime("%d/%m/%Y"), "sl": 5}])
+        self.client.post(f"/kiem-ke/{p.pk}/duyet/")
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (0, 45))
+
+    def test_view_hang_thua_khai_hsd_va_duyet(self):
         a = self.nhap(50, 20000, hsd=self.ngay(25))
         b = self.nhap(50, 20000, hsd=self.ngay(39))
         p, ct = self.kiem(105)
         self.client.force_login(self.nv)
         r = self.client.get(f"/kiem-ke/{p.pk}/")
-        self.assertTrue(r.context["phan_ra_sua"])
-        it = r.context["phan_ra"][0]
-        self.assertEqual([d["hsd"] for d in it["dong"]], [self.ngay(25).isoformat(), self.ngay(39).isoformat()])
-        self.assertIsNone(it["dong"][0]["sl_ht"])               # đếm mù: nhân viên không thấy SL từng lô
-        self.assertContains(r, "Phân rã hạn sử dụng")
+        self.assertTrue(r.context["hsd_sua"])
+        it = r.context["bang_hsd"][0]
+        self.assertEqual((it["loai"], it["sl"]), ("thua", 5))
+        self.assertEqual([g["hsd"] for g in it["goi_y"]], [self.ngay(25).isoformat(), self.ngay(39).isoformat()])
+        self.assertContains(r, "Hạn sử dụng hàng thừa")
+        self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {                       # có số lượng nhưng thiếu HSD
+            f"hsd_ngay_{ct.pk}": [self.ngay(25).isoformat(), ""], f"hsd_sl_{ct.pk}": ["3", "2"]})
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.DANG_KIEM)
         self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {
-            f"pr_hsd_{ct.pk}": [self.ngay(25).isoformat(), self.ngay(39).isoformat(), ""],   # HSD để trống
-            f"pr_sl_{ct.pk}": ["60", "40", "5"],
-        })
+            f"hsd_ngay_{ct.pk}": [self.ngay(25).isoformat(), self.ngay(300).isoformat()],
+            f"hsd_sl_{ct.pk}": ["3", "2"]})
         p.refresh_from_db()
         self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
         self.client.force_login(self.admin)
         r = self.client.get(f"/kiem-ke/{p.pk}/")
-        self.assertEqual(r.context["chua_phan_ra"], [])
+        self.assertEqual(r.context["chua_khai_hsd"], [])
         self.client.post(f"/kiem-ke/{p.pk}/duyet/")
-        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (60, 40))
-        self.assertEqual(ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}").han_su_dung, None)
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (53, 50))
+        self.assertEqual(ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}").han_su_dung, self.ngay(300))
+        self.assertKhopTon()
+
+    def test_view_hang_thua_khong_nhap_hsd(self):
+        a = self.nhap(10, 20000, hsd=self.ngay(25))
+        p, ct = self.kiem(12)
+        self.client.force_login(self.nv)
+        self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {f"hsd_khong_{ct.pk}": "1", f"hsd_lydo_{ct.pk}": "Không in HSD"})
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertContains(r, "Không in HSD")
+        self.client.post(f"/kiem-ke/{p.pk}/duyet/")
+        self.assertEqual(self.lo(a).so_luong_con_lai, 12)
         self.assertKhopTon()
 
     def test_dem_lan_1_khong_ghi_de(self):

@@ -49,8 +49,7 @@
       </tbody>
     </table>
   </div>
-  <div class="flex flex-wrap items-center justify-between gap-3 border-t bg-gray-50 px-5 py-4">
-    <p class="flex items-center gap-2 text-[12px] text-gray-500"><i data-lucide="eye-off" class="h-4 w-4"></i>Số lượng tồn hệ thống được ẩn để đảm bảo tính khách quan (kiểm kê mù).</p>
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t bg-gray-50 px-5 py-4">
     <div class="flex gap-2">
       {% if p.nguoi_tao_id == user.pk or user.is_admin %}<button type="button" class="btn btn-danger" @click="$dispatch('open-huy')">Hủy phiếu</button>{% endif %}
       <button class="btn btn-primary"><i data-lucide="save"></i>Lưu kết quả đếm {% if mode == 'dem_lan_2' %}lần 2{% else %}lần 1{% endif %}</button>
@@ -88,10 +87,9 @@
       </tbody>
     </table>
   </div>
-  <div class="space-y-1 border-t px-5 py-3 text-[11.5px] text-gray-500">
-    <p>Chênh lệch = Số lượng thực tế − Tồn hệ thống. Giá trị âm thể hiện số lượng thiếu (thất thoát). SL thực tế lấy theo lần đếm 2 nếu có.</p>
-    {% if an_he_thong %}<p class="flex items-center gap-1"><i data-lucide="eye-off" class="h-3.5 w-3.5"></i>Tồn hệ thống được ẩn với nhân viên cho đến khi phiếu được gửi duyệt.</p>{% endif %}
-  </div>
+  {% if an_he_thong %}<div class="border-t px-5 py-3 text-[11.5px] text-gray-500">
+    <p class="flex items-center gap-1"><i data-lucide="eye-off" class="h-3.5 w-3.5"></i>Tồn hệ thống được ẩn với nhân viên cho đến khi phiếu được gửi duyệt.</p>
+  </div>{% endif %}
 </div>
 
 {% if not an_he_thong %}
@@ -102,69 +100,71 @@
 </div>
 {% endif %}
 
-{% if phan_ra_sua %}
-<!-- ============ PHÂN RÃ HSD (bắt buộc với dòng lệch) ============ -->
-{{ phan_ra|json_script:"phan-ra-data" }}
-<div class="card mb-5 border-orange-200 p-5" x-data>
-  <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Phân rã hạn sử dụng <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-600">bắt buộc</span></h3>
-  <p class="mt-1 text-[12px] text-gray-500">Có sản phẩm lệch số so với hệ thống nên nút <b>Gửi duyệt</b> đang bị khóa. Hãy nhặt toàn bộ số hàng đã đếm lên, xem hạn in trên bao bì và nhập số lượng thực tế của <b>từng hạn sử dụng</b> cho đủ tổng. Khi duyệt, hệ thống ghi đè tồn từng lô theo đúng số này — thực tế là chân lý.</p>
-  <template x-for="it in $store.phanRa.items" :key="it.ct">
-    <div class="mt-4 rounded-xl border p-4" :class="$store.phanRa.ok(it) ? 'border-emerald-200 bg-emerald-50/30' : 'border-orange-200 bg-orange-50/30'">
+{% if hsd_sua %}
+<!-- ============ HSD HÀNG THỪA (nhân viên khai trước khi gửi duyệt) ============ -->
+{{ bang_hsd|json_script:"hsd-data" }}
+<div class="card mb-5 border-blue-200 p-5" x-data>
+  <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Hạn sử dụng hàng thừa</h3>
+  <p class="mt-1 text-[12px] text-gray-500">Hàng thiếu không cần nhập HSD — khi duyệt, hệ thống tự xuất theo lô có hạn cũ nhất. Với hàng thừa, nhập hạn in trên bao bì cho đủ số thừa; nếu sản phẩm không có HSD thì chọn <b>Không nhập HSD</b> và ghi lý do — khi duyệt, hàng thừa được nhập vào lô có hạn cũ nhất.</p>
+  <template x-for="it in $store.hsdThua.items" :key="it.ct">
+    <div class="mt-4 rounded-xl border p-4" :class="$store.hsdThua.ok(it) ? 'border-emerald-200 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/30'">
       <div class="flex flex-wrap items-center gap-2">
         <p class="mr-auto text-[13.5px] font-semibold text-brand-800"><span x-text="it.ma_sp"></span> · <span x-text="it.ten"></span></p>
-        <span class="rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold" :class="$store.phanRa.ok(it) ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'" x-text="$store.phanRa.nhan(it)"></span>
+        <span class="rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold" :class="$store.hsdThua.ok(it) ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'" x-text="$store.hsdThua.nhan(it)"></span>
       </div>
-      <p class="mt-1.5 text-[12px] italic text-gray-600" x-text="it.dong.length ? 'Hệ thống đang ghi nhận có ' + it.goi_y + '. Vui lòng nhập số lượng thực tế của từng lô cho đủ tổng ' + it.tong + '.' : 'Hệ thống không còn lô nào của sản phẩm này — thêm hạn sử dụng thực tế bên dưới cho đủ tổng ' + it.tong + '.'"></p>
-      <table class="tbl compact mt-2">
-        <thead><tr><th>Hạn sử dụng</th>{% if hien_sl_lo %}<th class="text-right">SL hệ thống</th>{% endif %}<th class="w-36 text-center">SL thực tế</th><th class="w-10"></th></tr></thead>
-        <tbody>
-          <template x-for="(d, i) in it.dong" :key="'d' + i">
-            <tr>
-              <td class="font-medium"><span x-text="'Lô HSD ' + d.nhan"></span><input type="hidden" form="form-gui-duyet" :name="'pr_hsd_' + it.ct" :value="d.hsd"></td>
-              {% if hien_sl_lo %}<td class="text-right text-gray-500" x-text="d.sl_ht"></td>{% endif %}
-              <td><input type="number" min="0" step="1" inputmode="numeric" form="form-gui-duyet" :name="'pr_sl_' + it.ct" x-model="d.sl" class="input text-center font-semibold" placeholder="0" onkeydown="return !'.,eE+-'.includes(event.key)"></td>
-              <td></td>
-            </tr>
-          </template>
-          <template x-for="(t, i) in it.them" :key="'t' + i">
-            <tr class="bg-blue-50/40">
-              <td><div class="flex flex-wrap items-center gap-2">
-                <input type="date" x-model="t.hsd" class="input !w-40">
-                <span class="text-[11.5px] text-gray-400">Không bắt buộc — để trống nếu hàng không có HSD</span>
-                <input type="hidden" form="form-gui-duyet" :name="'pr_hsd_' + it.ct" :value="t.hsd || 'none'"></div></td>
-              {% if hien_sl_lo %}<td class="text-right text-gray-400">0</td>{% endif %}
-              <td><input type="number" min="0" step="1" inputmode="numeric" form="form-gui-duyet" :name="'pr_sl_' + it.ct" x-model="t.sl" class="input text-center font-semibold" placeholder="0" onkeydown="return !'.,eE+-'.includes(event.key)"></td>
-              <td><button type="button" class="text-gray-400 hover:text-red-600" title="Xóa dòng" @click="it.them.splice(i, 1)">✕</button></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-      <button type="button" class="btn btn-ghost mt-2 !text-[12px]" @click="it.them.push({ hsd: '', sl: '' })">+ Thêm hạn sử dụng khác (hàng không khớp lô nào)</button>
+      <label class="mt-3 inline-flex cursor-pointer items-center gap-2 text-[12.5px] font-medium text-gray-700">
+        <input type="checkbox" value="1" form="form-gui-duyet" :name="'hsd_khong_' + it.ct" x-model="it.khong_hsd" class="rounded text-brand-700 focus:ring-brand-600">
+        Không nhập HSD
+      </label>
+      <div x-show="it.khong_hsd" class="mt-2">
+        <input type="text" maxlength="255" form="form-gui-duyet" :name="'hsd_lydo_' + it.ct" :disabled="!it.khong_hsd" x-model="it.ly_do" class="input" placeholder="Lý do không nhập HSD (VD: sản phẩm không in hạn sử dụng)">
+        <p class="mt-1 text-[11.5px] text-gray-500" x-text="it.lo_cu_nhat ? 'Khi duyệt: ' + it.sl + ' ' + it.don_vi + ' thừa được nhập vào lô HSD cũ nhất (' + it.lo_cu_nhat + ').' : 'Khi duyệt: kho không còn lô nào — tạo lô mới không có HSD.'"></p>
+      </div>
+      <div x-show="!it.khong_hsd">
+        <p x-show="it.goi_y.length" class="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px] text-gray-500">Hạn đang có trong kho:
+          <template x-for="g in it.goi_y" :key="g.hsd"><button type="button" class="rounded-full bg-white px-2 py-0.5 font-medium text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50" @click="$store.hsdThua.chon(it, g.hsd)" x-text="g.nhan"></button></template>
+        </p>
+        <table class="tbl compact mt-2">
+          <thead><tr><th>Hạn sử dụng</th><th class="w-36 text-center">Số lượng thừa</th><th class="w-10"></th></tr></thead>
+          <tbody>
+            <template x-for="(d, i) in it.dong" :key="i">
+              <tr>
+                <td><input type="date" form="form-gui-duyet" :name="'hsd_ngay_' + it.ct" :disabled="it.khong_hsd" x-model="d.hsd" class="input !w-44"></td>
+                <td><input type="number" min="0" step="1" inputmode="numeric" form="form-gui-duyet" :name="'hsd_sl_' + it.ct" :disabled="it.khong_hsd" x-model="d.sl" class="input text-center font-semibold" placeholder="0" onkeydown="return !'.,eE+-'.includes(event.key)"></td>
+                <td><button type="button" x-show="it.dong.length > 1" class="text-gray-400 hover:text-red-600" title="Xóa dòng" @click="it.dong.splice(i, 1)">✕</button></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <button type="button" class="btn btn-ghost mt-2 !text-[12px]" @click="it.dong.push({ hsd: '', sl: '' })">+ Thêm hạn sử dụng khác</button>
+      </div>
     </div>
   </template>
 </div>
-{% elif phan_ra %}
-<!-- ============ PHÂN RÃ HSD (chỉ xem) ============ -->
+{% elif bang_hsd and p.trang_thai != 'DANG_KIEM' %}
+<!-- ============ XỬ LÝ HSD KHI DUYỆT (chỉ xem) ============ -->
 <div class="card mb-5 overflow-hidden">
   <div class="border-b px-5 py-4">
-    <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Phân rã hạn sử dụng thực tế</h3>
-    <p class="text-[12px] text-gray-500">{% if p.trang_thai == 'HOAN_THANH' %}Tồn từng lô đã được ghi đè theo số lượng thực tế dưới đây.{% else %}Khi duyệt, tồn từng lô sẽ được ghi đè theo số lượng thực tế (hạn không có trong bảng → lô về 0; hạn mới → tạo lô mới).{% endif %}</p>
+    <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Hạn sử dụng hàng thừa / thiếu</h3>
+    <p class="text-[12px] text-gray-500">{% if p.trang_thai == 'HOAN_THANH' %}Hàng thiếu đã được xuất theo lô HSD cũ nhất; hàng thừa đã được nhập theo HSD dưới đây.{% else %}Khi duyệt: hàng thiếu tự xuất theo lô HSD cũ nhất; hàng thừa tự nhập theo HSD nhân viên khai (không nhập HSD → vào lô HSD cũ nhất).{% endif %}</p>
   </div>
   <div class="overflow-x-auto">
     <table class="tbl compact">
-      <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th>Hạn sử dụng</th>{% if hien_sl_lo %}<th class="text-right">SL hệ thống</th>{% endif %}<th class="text-right">SL thực tế</th>{% if hien_sl_lo %}<th class="text-right">Chênh lệch</th>{% endif %}</tr></thead>
+      <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th class="text-right">Chênh lệch</th><th>Hạn sử dụng</th></tr></thead>
       <tbody>
-      {% for it in phan_ra %}{% for d in it.dong %}
-        <tr><td class="font-semibold text-brand-800">{{ it.ma_sp }}</td><td>{{ it.ten }}</td><td>Lô HSD {{ d.nhan }}</td>
-          {% if hien_sl_lo %}<td class="text-right">{{ d.sl_ht }}</td>{% endif %}<td class="text-right font-semibold">{{ d.sl|default:0 }} {{ it.don_vi }}</td>
-          {% if hien_sl_lo %}<td class="text-right font-semibold {% if d.lech < 0 %}text-red-600{% elif d.lech > 0 %}text-blue-600{% else %}text-emerald-700{% endif %}">{{ d.lech|signed }}</td>{% endif %}</tr>
-      {% endfor %}{% for d in it.them %}
-        <tr class="bg-blue-50/40"><td class="font-semibold text-brand-800">{{ it.ma_sp }}</td><td>{{ it.ten }}</td><td>{% if p.trang_thai == 'HOAN_THANH' %}Lô HSD {{ d.nhan }}{% else %}{{ d.nhan }} <span class="text-[11px] text-blue-600">(lô mới)</span>{% endif %}</td>
-          {% if hien_sl_lo %}<td class="text-right text-gray-400">0</td>{% endif %}<td class="text-right font-semibold">{{ d.sl }} {{ it.don_vi }}</td>
-          {% if hien_sl_lo %}<td class="text-right font-semibold text-blue-600">{{ d.lech|signed }}</td>{% endif %}</tr>
-      {% endfor %}{% if not it.dong and not it.them %}
-        <tr><td class="font-semibold text-brand-800">{{ it.ma_sp }}</td><td>{{ it.ten }}</td><td colspan="4" class="text-gray-400">Chưa phân rã / đếm thực tế 0 — mọi lô về 0</td></tr>
-      {% endif %}{% endfor %}
+      {% for it in bang_hsd %}
+        <tr><td class="font-semibold text-brand-800">{{ it.ma_sp }}</td><td>{{ it.ten }}</td>
+          {% if it.loai == 'thieu' %}
+          <td class="text-right font-semibold text-red-600">−{{ it.sl }} {{ it.don_vi }}</td>
+          <td class="text-[12px]"><span class="text-gray-500">Không cần HSD — {% if p.trang_thai == 'HOAN_THANH' %}đã xuất{% else %}tự xuất{% endif %} theo lô HSD cũ nhất</span>
+            {% if it.du_kien %}<ul class="mt-1 space-y-0.5">{% for d in it.du_kien %}<li>Lô HSD {{ d.nhan }}: <b class="text-red-600">−{{ d.sl }}</b></li>{% endfor %}</ul>{% endif %}</td>
+          {% else %}
+          <td class="text-right font-semibold text-blue-600">+{{ it.sl }} {{ it.don_vi }}</td>
+          <td class="text-[12px]">{% if it.khong_hsd %}<span class="font-medium">Không nhập HSD</span> — lý do: {{ it.ly_do }}<br><span class="text-gray-500">→ {% if p.trang_thai == 'HOAN_THANH' %}đã nhập{% else %}nhập{% endif %} vào lô HSD cũ nhất{% if it.lo_cu_nhat %} ({{ it.lo_cu_nhat }}){% endif %}</span>
+            {% elif it.da_khai %}<ul class="space-y-0.5">{% for d in it.dong %}<li>Lô HSD {{ d.nhan }}: <b class="text-blue-600">+{{ d.sl }}</b></li>{% endfor %}</ul>
+            {% else %}<span class="text-red-600">Chưa khai HSD</span>{% endif %}</td>
+          {% endif %}</tr>
+      {% endfor %}
       </tbody>
     </table>
   </div>
@@ -172,21 +172,17 @@
 {% endif %}
 
 {% if mode == 'duyet' %}
-{% if chua_phan_ra %}
+{% if chua_khai_hsd %}
 <div class="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
   <i data-lucide="lock" class="mt-0.5 h-4 w-4 shrink-0"></i>
-  <span>Nút Duyệt bị khóa: chưa phân rã hạn sử dụng cho {{ chua_phan_ra|join:", " }}. Hãy từ chối để nhân viên đếm lại và phân rã HSD.</span>
+  <span>Nút Duyệt bị khóa: hàng thừa chưa được khai hạn sử dụng ({{ chua_khai_hsd|join:", " }}). Hãy từ chối để nhân viên bổ sung.</span>
 </div>
 {% endif %}
-<div class="mb-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] text-amber-800">
-  <i data-lucide="triangle-alert" class="mt-0.5 h-4 w-4 shrink-0"></i>
-  <span>Sau khi phê duyệt, hệ thống sẽ tự động ghi đè và cập nhật số lượng tồn kho trên CSDL về số lượng thực tế{% for ct in chi_tiet %}{% if ct.sl_chenh_lech and forloop.counter < 4 %} ({{ ct.sl_dem_thuc_te|qty }} {{ ct.don_vi }} {{ ct.id_sp.ten_sp }}){% endif %}{% endfor %} và ghi nhật ký kho.</span>
-</div>
 <div class="flex flex-wrap justify-end gap-2 border-t pt-5">
   <form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu kiểm kê {{ p.pk }}?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>
   <button class="btn btn-danger" @click="$dispatch('open-tuchoi')">Từ chối / Yêu cầu đếm lại</button>
   <form method="post" action="{% url 'kiem_duyet' p.pk %}" onsubmit="return confirm('Xác nhận duyệt và cân bằng tồn kho theo số lượng thực tế?')">{% csrf_token %}
-    <button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" {% if chua_phan_ra %}disabled title="Chưa phân rã hạn sử dụng"{% endif %}><i data-lucide="{% if chua_phan_ra %}lock{% else %}scale{% endif %}"></i>Xác nhận Duyệt &amp; Cập nhật Tồn kho</button></form>
+    <button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" {% if chua_khai_hsd %}disabled title="Hàng thừa chưa khai hạn sử dụng"{% endif %}><i data-lucide="{% if chua_khai_hsd %}lock{% else %}scale{% endif %}"></i>Xác nhận Duyệt &amp; Cập nhật Tồn kho</button></form>
 </div>
 {% url 'kiem_tu_choi' p.pk as tc_url %}
 {% include "partials/reason_modal.html" with id="tuchoi" action=tc_url title="Từ chối phiếu kiểm kê" desc="Nhân viên sẽ nhận lại phiếu và có thể mở đếm lại từ đầu." label="Lý do từ chối" btn="Từ chối phiếu" %}
@@ -198,7 +194,7 @@
     <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-danger">Hủy phiếu</button></form>
     {% endif %}
     <form method="post" action="{% url 'kiem_gui_duyet' p.pk %}" id="form-gui-duyet" x-data>{% csrf_token %}
-      {% if phan_ra_sua %}<button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="!$store.phanRa.allOk()" :title="$store.phanRa.allOk() ? '' : 'Phân rã hạn sử dụng cho đủ tổng trước khi gửi duyệt'"><i data-lucide="send"></i>Gửi duyệt</button>
+      {% if hsd_sua %}<button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="!$store.hsdThua.allOk()" :title="$store.hsdThua.allOk() ? '' : 'Nhập HSD cho đủ số hàng thừa (hoặc chọn Không nhập HSD và ghi lý do) trước khi gửi duyệt'"><i data-lucide="send"></i>Gửi duyệt</button>
       {% else %}<button class="btn btn-primary"><i data-lucide="send"></i>Gửi duyệt</button>{% endif %}</form>
   {% elif p.trang_thai == 'BI_TU_CHOI' %}
     {% if user.is_admin %}<form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>{% endif %}
@@ -235,23 +231,31 @@
 </div>
 {% endblock %}
 {% block scripts %}
-{% if phan_ra_sua %}
+{% if hsd_sua %}
 <script>
 document.addEventListener('alpine:init', () => {
   const so = v => (v === '' || v === null || v === undefined) ? 0 : Number(v);
-  Alpine.store('phanRa', {
-    items: JSON.parse(document.getElementById('phan-ra-data').textContent).filter(it => it.can),
-    tong(it) { return [...it.dong, ...it.them].reduce((s, d) => s + so(d.sl), 0); },
+  Alpine.store('hsdThua', {
+    items: JSON.parse(document.getElementById('hsd-data').textContent).filter(it => it.loai === 'thua'),
+    tong(it) { return it.dong.reduce((s, d) => s + so(d.sl), 0); },
     ok(it) {
-      if ([...it.dong, ...it.them].some(d => so(d.sl) < 0 || !Number.isInteger(so(d.sl)))) return false;
-      return this.tong(it) === it.tong;
+      if (it.khong_hsd) return it.ly_do.trim() !== '';
+      if (it.dong.some(d => so(d.sl) < 0 || !Number.isInteger(so(d.sl)) || (so(d.sl) > 0 && !d.hsd))) return false;
+      return this.tong(it) === it.sl;
     },
     nhan(it) {
-      const t = this.tong(it), base = t + ' / ' + it.tong + ' ' + it.don_vi;
+      if (it.khong_hsd) return it.ly_do.trim() ? 'Không nhập HSD · Đủ' : 'Ghi lý do không nhập HSD';
+      const t = this.tong(it), base = 'Thừa ' + t + ' / ' + it.sl + ' ' + it.don_vi;
+      if (it.dong.some(d => so(d.sl) > 0 && !d.hsd)) return base + ' · Chọn hạn sử dụng';
       if (this.ok(it)) return base + ' · Đủ';
-      if (t < it.tong) return base + ' · Còn thiếu ' + (it.tong - t);
-      if (t > it.tong) return base + ' · Vượt ' + (t - it.tong);
-      return base + ' · Chọn hạn cho dòng mới';
+      if (t < it.sl) return base + ' · Còn thiếu ' + (it.sl - t);
+      return base + ' · Vượt ' + (t - it.sl);
+    },
+    chon(it, hsd) {  // bấm gợi ý hạn đang có trong kho → điền vào dòng trống đầu tiên, hết dòng trống thì thêm dòng
+      if (it.dong.some(d => d.hsd === hsd)) return;
+      const trong = it.dong.find(d => !d.hsd);
+      if (trong) trong.hsd = hsd;
+      else it.dong.push({ hsd, sl: Math.max(it.sl - this.tong(it), 0) || '' });
     },
     allOk() { return this.items.every(it => this.ok(it)); },
   });

@@ -491,6 +491,8 @@ class ChiTietPhieuKiemKe(models.Model):
     sl_chenh_lech = models.DecimalField(**QTY, default=0)
     don_vi = models.CharField(max_length=30)
     ghi_chu = models.CharField(max_length=255, blank=True, default="")
+    # hàng thừa nhân viên chọn "Không nhập HSD" → bắt buộc lý do; khi duyệt cộng vào lô có HSD cũ nhất
+    ly_do_khong_hsd = models.CharField(max_length=255, null=True, blank=True)
 
     class Meta:
         db_table = "chi_tiet_phieu_kiem_ke"
@@ -501,13 +503,14 @@ class ChiTietPhieuKiemKe(models.Model):
         return self.sl_dem_lan_2 if self.sl_dem_lan_2 is not None else self.sl_dem_lan_1
 
     @property
-    def can_phan_ra(self):
-        """Dòng lệch (sau lần đếm cuối) → bắt buộc phân rã số đếm thực tế theo hạn sử dụng trước khi gửi duyệt."""
-        return bool(self.sl_chenh_lech) and (self.sl_dem_thuc_te or 0) > 0
+    def can_khai_hsd(self):
+        """Chỉ hàng THỪA mới phải khai hạn sử dụng (hoặc chọn không nhập HSD kèm lý do) trước khi gửi duyệt.
+        Hàng thiếu không cần: khi duyệt hệ thống tự xuất theo lô có HSD cũ nhất."""
+        return (self.sl_chenh_lech or 0) > 0
 
     @property
-    def da_phan_ra(self):
-        return sum((r.so_luong for r in self.phan_ra.all()), Decimal(0)) == (self.sl_dem_thuc_te or 0)
+    def da_khai_hsd(self):
+        return bool(self.ly_do_khong_hsd) or any(True for _ in self.phan_ra.all())
 
     @property
     def gia_tri_chenh_lech(self):
@@ -519,10 +522,9 @@ class ChiTietPhieuKiemKe(models.Model):
 
 
 class PhanRaHsdKiemKe(models.Model):
-    """Số lượng thực tế của 1 dòng kiểm kê lệch, chia theo hạn sử dụng in trên bao bì.
+    """Phần hàng THỪA của 1 dòng kiểm kê, chia theo hạn sử dụng in trên bao bì.
 
-    Khi duyệt: các lô cùng hạn bị GHI ĐÈ về đúng số này (thực tế là chân lý); hạn chưa có lô nào → lô mới.
-    han_su_dung NULL = hàng không có hạn sử dụng.
+    Khi duyệt: cộng vào lô còn hàng cùng hạn (lô nhập mới nhất); hạn chưa có lô nào → lô mới trong PN-<mã phiếu>.
     """
     ct_kiem = models.ForeignKey(ChiTietPhieuKiemKe, on_delete=models.CASCADE, related_name="phan_ra",
                                 db_column="id_chi_tiet_kiem")

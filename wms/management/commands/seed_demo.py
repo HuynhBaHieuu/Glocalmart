@@ -283,8 +283,9 @@ class Command(BaseCommand):
                                             ma_doi_tuong=p.pk, ngay_tao=t + timedelta(minutes=30))
                 if gui:
                     p.refresh_from_db()
-                    gui_duyet(p, {ct.pk: ct.id_sp.han_su_dung for ct in p.chi_tiet.select_related("id_sp")
-                                  if ct.sl_thua > 0})
+                    gui_duyet(p, {ct.pk: ({"dong": [(ct.id_sp.han_su_dung, ct.sl_thua)]} if ct.id_sp.han_su_dung
+                                          else {"khong_hsd": True, "ly_do": "Sản phẩm không in hạn sử dụng"})
+                                  for ct in p.chi_tiet.select_related("id_sp") if ct.sl_thua > 0})
                     PhieuKiemKe.objects.filter(pk=p.pk).update(ngay_gui_duyet=t + timedelta(minutes=45))
                     AuditLog.objects.create(nguoi_dung=user, hanh_dong="GUI_DUYET", doi_tuong="phieu_kiem_ke",
                                             ma_doi_tuong=p.pk, ngay_tao=t + timedelta(minutes=45))
