@@ -644,7 +644,7 @@ class LoFefoTest(Base):
         a = self.nhap(50, 20000, hsd=self.ngay(25))
         b = self.nhap(50, 20000, hsd=self.ngay(39))
         p, ct = self.kiem(105)
-        self.client.force_login(self.nv)
+        self.client.force_login(self.admin)                     # chỉ Quản trị viên có bảng nhập HSD hàng thừa
         r = self.client.get(f"/kiem-ke/{p.pk}/")
         self.assertTrue(r.context["hsd_sua"])
         it = r.context["bang_hsd"][0]
@@ -660,9 +660,6 @@ class LoFefoTest(Base):
             f"hsd_sl_{ct.pk}": ["3", "2"]})
         p.refresh_from_db()
         self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
-        self.client.force_login(self.admin)
-        r = self.client.get(f"/kiem-ke/{p.pk}/")
-        self.assertEqual(r.context["chua_khai_hsd"], [])
         self.client.post(f"/kiem-ke/{p.pk}/duyet/")
         self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (53, 50))
         self.assertEqual(ChiTietPhieuNhap.objects.get(ma_phieu_nhap=f"PN-{p.pk}").han_su_dung, self.ngay(300))
@@ -671,16 +668,57 @@ class LoFefoTest(Base):
     def test_view_hang_thua_khong_nhap_hsd(self):
         a = self.nhap(10, 20000, hsd=self.ngay(25))
         p, ct = self.kiem(12)
-        self.client.force_login(self.nv)
+        self.client.force_login(self.admin)
         self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {f"hsd_khong_{ct.pk}": "1", f"hsd_lydo_{ct.pk}": "Không in HSD"})
         p.refresh_from_db()
         self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
-        self.client.force_login(self.admin)
         r = self.client.get(f"/kiem-ke/{p.pk}/")
         self.assertContains(r, "Không in HSD")
         self.client.post(f"/kiem-ke/{p.pk}/duyet/")
         self.assertEqual(self.lo(a).so_luong_con_lai, 12)
         self.assertKhopTon()
+
+    def test_view_nhan_vien_gui_duyet_khong_nhap_hsd(self):
+        a = self.nhap(20, 20000, hsd=self.ngay(30))
+        b = self.nhap(20, 20000, hsd=self.ngay(10))             # lô có hạn cũ nhất
+        p, ct = self.kiem(43)                                   # thừa 3
+        self.client.force_login(self.nv)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertFalse(r.context["hsd_sua"])
+        self.assertNotContains(r, "Hạn sử dụng hàng thừa")
+        self.assertNotContains(r, "Tồn hệ thống được ẩn")
+        # HSD nhân viên cố gửi lên bị bỏ qua
+        self.client.post(f"/kiem-ke/{p.pk}/gui-duyet/", {f"hsd_ngay_{ct.pk}": [self.ngay(300).isoformat()],
+                                                        f"hsd_sl_{ct.pk}": ["3"]})
+        p.refresh_from_db()
+        ct.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.CHO_DUYET)
+        self.assertFalse(ct.da_khai_hsd)
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertNotContains(r, "Khi duyệt:")
+        self.assertNotContains(r, "Chưa khai HSD")
+        self.client.post(f"/kiem-ke/{p.pk}/duyet/")
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.HOAN_THANH)
+        self.assertEqual((self.lo(a).so_luong_con_lai, self.lo(b).so_luong_con_lai), (20, 23))
+        self.assertKhopTon()
+
+    def test_view_nhan_vien_khong_duoc_huy_phieu_kiem_ke(self):
+        self.nhap(10, 20000, hsd=self.ngay(25))
+        p, ct = self.kiem(10)
+        self.client.force_login(self.nv)                        # nv là người tạo phiếu nhưng vẫn không được hủy
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertNotContains(r, "Hủy phiếu")
+        self.client.post(f"/kiem-ke/{p.pk}/huy/")
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.DANG_KIEM)
+        self.client.force_login(self.admin)
+        r = self.client.get(f"/kiem-ke/{p.pk}/")
+        self.assertContains(r, "Hủy phiếu")
+        self.client.post(f"/kiem-ke/{p.pk}/huy/")
+        p.refresh_from_db()
+        self.assertEqual(p.trang_thai, PhieuKiemKe.DA_HUY)
 
     def test_dem_lan_1_khong_ghi_de(self):
         self.nhap(5, 20000)

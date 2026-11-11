@@ -565,11 +565,12 @@ def _kiem_tra_hsd_thua(ct, dong):
     return gop
 
 
-def gui_duyet(phieu: PhieuKiemKe, khai_bao=None):
+def gui_duyet(phieu: PhieuKiemKe, khai_bao=None, bat_buoc_hsd=True):
     """Gửi duyệt. Hàng THIẾU không cần nhập HSD. Mỗi dòng THỪA phải khai một trong hai:
     - {"dong": [(hsd, số lượng)]}: HSD in trên bao bì của phần hàng thừa, tổng = số thừa;
     - {"khong_hsd": True, "ly_do": "..."}: không nhập HSD (bắt buộc lý do) → khi duyệt cộng vào lô HSD cũ nhất.
-    khai_bao: {id_chi_tiet: dict như trên}."""
+    khai_bao: {id_chi_tiet: dict như trên}.
+    bat_buoc_hsd=False (nhân viên gửi duyệt): không cần khai gì cho hàng thừa → khi duyệt cộng vào lô HSD cũ nhất."""
     khai_bao = khai_bao or {}
     if phieu.trang_thai != PhieuKiemKe.DANG_KIEM:
         raise NghiepVuError("Phiếu không ở trạng thái đang kiểm.")
@@ -588,7 +589,7 @@ def gui_duyet(phieu: PhieuKiemKe, khai_bao=None):
                 continue
             kb = khai_bao.get(ct.pk)
             if kb is None:
-                if not ct.da_khai_hsd:
+                if bat_buoc_hsd and not ct.da_khai_hsd:
                     thieu.append(ct.id_sp.ten_sp)
                 continue
             if kb.get("khong_hsd"):
@@ -650,7 +651,7 @@ def duyet_kiem_ke(ma_phieu, user):
     """Xác nhận & cân bằng tồn kho về SL thực tế, ghi NHAT_KY_KHO.
 
     - Thiếu → tự xuất phần thiếu theo lô có HSD cũ nhất trước (FEFO).
-    - Thừa → tự nhập phần thừa: theo HSD nhân viên khai (cộng vào lô cùng hạn / tạo lô mới); không nhập HSD →
+    - Thừa → tự nhập phần thừa: theo HSD đã khai (cộng vào lô cùng hạn / tạo lô mới); không nhập / không khai HSD →
       cộng vào lô có HSD cũ nhất hiện có.
     Phần chênh được tính lại theo tồn lúc duyệt (tồn có thể đã đổi sau khi đếm).
     """
@@ -667,10 +668,7 @@ def duyet_kiem_ke(ma_phieu, user):
                 if not ct.can_khai_hsd:
                     raise NghiepVuError(f"{sp.ten_sp}: tồn kho đã thay đổi sau khi đếm (thừa {fmt(lech)} {sp.don_vi} "
                                         "chưa rõ hạn sử dụng) — hãy từ chối phiếu để nhân viên đếm lại.")
-                if not ct.da_khai_hsd:
-                    raise NghiepVuError(f"{sp.ten_sp}: hàng thừa chưa được khai hạn sử dụng — hãy từ chối phiếu "
-                                        "để nhân viên bổ sung.")
-                con = lech
+                con = lech  # chưa khai HSD (nhân viên gửi duyệt) → toàn bộ phần thừa vào lô HSD cũ nhất
                 if not ct.ly_do_khong_hsd:
                     for r in ct.phan_ra.all():
                         lay = min(con, r.so_luong)

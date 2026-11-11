@@ -51,7 +51,7 @@
   </div>
   <div class="flex flex-wrap items-center justify-end gap-3 border-t bg-gray-50 px-5 py-4">
     <div class="flex gap-2">
-      {% if p.nguoi_tao_id == user.pk or user.is_admin %}<button type="button" class="btn btn-danger" @click="$dispatch('open-huy')">Hủy phiếu</button>{% endif %}
+      {% if user.is_admin %}<button type="button" class="btn btn-danger" @click="$dispatch('open-huy')">Hủy phiếu</button>{% endif %}
       <button class="btn btn-primary"><i data-lucide="save"></i>Lưu kết quả đếm {% if mode == 'dem_lan_2' %}lần 2{% else %}lần 1{% endif %}</button>
     </div>
   </div>
@@ -87,9 +87,6 @@
       </tbody>
     </table>
   </div>
-  {% if an_he_thong %}<div class="border-t px-5 py-3 text-[11.5px] text-gray-500">
-    <p class="flex items-center gap-1"><i data-lucide="eye-off" class="h-3.5 w-3.5"></i>Tồn hệ thống được ẩn với nhân viên cho đến khi phiếu được gửi duyệt.</p>
-  </div>{% endif %}
 </div>
 
 {% if not an_he_thong %}
@@ -101,11 +98,10 @@
 {% endif %}
 
 {% if hsd_sua %}
-<!-- ============ HSD HÀNG THỪA (nhân viên khai trước khi gửi duyệt) ============ -->
+<!-- ============ HSD HÀNG THỪA (chỉ Quản trị viên khai trước khi gửi duyệt; nhân viên không nhập HSD) ============ -->
 {{ bang_hsd|json_script:"hsd-data" }}
 <div class="card mb-5 border-blue-200 p-5" x-data>
   <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Hạn sử dụng hàng thừa</h3>
-  <p class="mt-1 text-[12px] text-gray-500">Hàng thiếu không cần nhập HSD — khi duyệt, hệ thống tự xuất theo lô có hạn cũ nhất. Với hàng thừa, nhập hạn in trên bao bì cho đủ số thừa; nếu sản phẩm không có HSD thì chọn <b>Không nhập HSD</b> và ghi lý do — khi duyệt, hàng thừa được nhập vào lô có hạn cũ nhất.</p>
   <template x-for="it in $store.hsdThua.items" :key="it.ct">
     <div class="mt-4 rounded-xl border p-4" :class="$store.hsdThua.ok(it) ? 'border-emerald-200 bg-emerald-50/30' : 'border-blue-200 bg-blue-50/30'">
       <div class="flex flex-wrap items-center gap-2">
@@ -118,7 +114,6 @@
       </label>
       <div x-show="it.khong_hsd" class="mt-2">
         <input type="text" maxlength="255" form="form-gui-duyet" :name="'hsd_lydo_' + it.ct" :disabled="!it.khong_hsd" x-model="it.ly_do" class="input" placeholder="Lý do không nhập HSD (VD: sản phẩm không in hạn sử dụng)">
-        <p class="mt-1 text-[11.5px] text-gray-500" x-text="it.lo_cu_nhat ? 'Khi duyệt: ' + it.sl + ' ' + it.don_vi + ' thừa được nhập vào lô HSD cũ nhất (' + it.lo_cu_nhat + ').' : 'Khi duyệt: kho không còn lô nào — tạo lô mới không có HSD.'"></p>
       </div>
       <div x-show="!it.khong_hsd">
         <p x-show="it.goi_y.length" class="mt-2 flex flex-wrap items-center gap-1.5 text-[11.5px] text-gray-500">Hạn đang có trong kho:
@@ -146,7 +141,7 @@
 <div class="card mb-5 overflow-hidden">
   <div class="border-b px-5 py-4">
     <h3 class="flex items-center gap-2 text-[15px] font-semibold text-brand-800"><i data-lucide="layers" class="h-4 w-4"></i>Hạn sử dụng hàng thừa / thiếu</h3>
-    <p class="text-[12px] text-gray-500">{% if p.trang_thai == 'HOAN_THANH' %}Hàng thiếu đã được xuất theo lô HSD cũ nhất; hàng thừa đã được nhập theo HSD dưới đây.{% else %}Khi duyệt: hàng thiếu tự xuất theo lô HSD cũ nhất; hàng thừa tự nhập theo HSD nhân viên khai (không nhập HSD → vào lô HSD cũ nhất).{% endif %}</p>
+    {% if p.trang_thai == 'HOAN_THANH' %}<p class="text-[12px] text-gray-500">Hàng thiếu đã được xuất theo lô HSD cũ nhất; hàng thừa đã được nhập theo HSD dưới đây.</p>{% endif %}
   </div>
   <div class="overflow-x-auto">
     <table class="tbl compact">
@@ -162,7 +157,7 @@
           <td class="text-right font-semibold text-blue-600">+{{ it.sl }} {{ it.don_vi }}</td>
           <td class="text-[12px]">{% if it.khong_hsd %}<span class="font-medium">Không nhập HSD</span> — lý do: {{ it.ly_do }}<br><span class="text-gray-500">→ {% if p.trang_thai == 'HOAN_THANH' %}đã nhập{% else %}nhập{% endif %} vào lô HSD cũ nhất{% if it.lo_cu_nhat %} ({{ it.lo_cu_nhat }}){% endif %}</span>
             {% elif it.da_khai %}<ul class="space-y-0.5">{% for d in it.dong %}<li>Lô HSD {{ d.nhan }}: <b class="text-blue-600">+{{ d.sl }}</b></li>{% endfor %}</ul>
-            {% else %}<span class="text-red-600">Chưa khai HSD</span>{% endif %}</td>
+            {% else %}<span class="font-medium">Không nhập HSD</span><br><span class="text-gray-500">→ {% if p.trang_thai == 'HOAN_THANH' %}đã nhập{% else %}nhập{% endif %} vào lô HSD cũ nhất{% if it.lo_cu_nhat %} ({{ it.lo_cu_nhat }}){% endif %}</span>{% endif %}</td>
           {% endif %}</tr>
       {% endfor %}
       </tbody>
@@ -172,17 +167,11 @@
 {% endif %}
 
 {% if mode == 'duyet' %}
-{% if chua_khai_hsd %}
-<div class="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
-  <i data-lucide="lock" class="mt-0.5 h-4 w-4 shrink-0"></i>
-  <span>Nút Duyệt bị khóa: hàng thừa chưa được khai hạn sử dụng ({{ chua_khai_hsd|join:", " }}). Hãy từ chối để nhân viên bổ sung.</span>
-</div>
-{% endif %}
 <div class="flex flex-wrap justify-end gap-2 border-t pt-5">
   <form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu kiểm kê {{ p.pk }}?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>
   <button class="btn btn-danger" @click="$dispatch('open-tuchoi')">Từ chối / Yêu cầu đếm lại</button>
   <form method="post" action="{% url 'kiem_duyet' p.pk %}" onsubmit="return confirm('Xác nhận duyệt và cân bằng tồn kho theo số lượng thực tế?')">{% csrf_token %}
-    <button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" {% if chua_khai_hsd %}disabled title="Hàng thừa chưa khai hạn sử dụng"{% endif %}><i data-lucide="{% if chua_khai_hsd %}lock{% else %}scale{% endif %}"></i>Xác nhận Duyệt &amp; Cập nhật Tồn kho</button></form>
+    <button class="btn btn-primary"><i data-lucide="scale"></i>Xác nhận Duyệt &amp; Cập nhật Tồn kho</button></form>
 </div>
 {% url 'kiem_tu_choi' p.pk as tc_url %}
 {% include "partials/reason_modal.html" with id="tuchoi" action=tc_url title="Từ chối phiếu kiểm kê" desc="Nhân viên sẽ nhận lại phiếu và có thể mở đếm lại từ đầu." label="Lý do từ chối" btn="Từ chối phiếu" %}
@@ -190,15 +179,15 @@
 {% else %}
 <div class="flex flex-wrap justify-end gap-2 border-t pt-5">
   {% if p.trang_thai == 'DANG_KIEM' %}
-    {% if p.nguoi_tao_id == user.pk or user.is_admin %}
+    {% if user.is_admin %}
     <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-danger">Hủy phiếu</button></form>
     {% endif %}
     <form method="post" action="{% url 'kiem_gui_duyet' p.pk %}" id="form-gui-duyet" x-data>{% csrf_token %}
       {% if hsd_sua %}<button class="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50" :disabled="!$store.hsdThua.allOk()" :title="$store.hsdThua.allOk() ? '' : 'Nhập HSD cho đủ số hàng thừa (hoặc chọn Không nhập HSD và ghi lý do) trước khi gửi duyệt'"><i data-lucide="send"></i>Gửi duyệt</button>
       {% else %}<button class="btn btn-primary"><i data-lucide="send"></i>Gửi duyệt</button>{% endif %}</form>
   {% elif p.trang_thai == 'BI_TU_CHOI' %}
-    {% if user.is_admin %}<form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>{% endif %}
-    <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-ghost">Hủy phiếu</button></form>
+    {% if user.is_admin %}<form method="post" action="{% url 'kiem_xoa' p.pk %}" onsubmit="return confirm('Xóa phiếu?')">{% csrf_token %}<button class="btn btn-danger">Xóa phiếu</button></form>
+    <form method="post" action="{% url 'kiem_huy' p.pk %}" onsubmit="return confirm('Hủy phiếu kiểm kê này?')">{% csrf_token %}<button class="btn btn-ghost">Hủy phiếu</button></form>{% endif %}
     <form method="post" action="{% url 'kiem_dem_lai' p.pk %}">{% csrf_token %}<button class="btn btn-primary"><i data-lucide="rotate-ccw"></i>Mở đếm lại</button></form>
   {% elif p.trang_thai == 'CHO_DUYET' %}
     <p class="flex items-center gap-2 text-[12.5px] text-amber-700"><i data-lucide="hourglass" class="h-4 w-4"></i>Phiếu đang chờ Quản lý duyệt.</p>
@@ -220,6 +209,7 @@
 </div>
 {% endif %}
 
+{% if user.is_admin %}
 {% url 'kiem_huy' p.pk as huy_url %}
 <div x-data="{ open:false }" @open-huy.window="open=true" x-cloak>
   <div x-show="open" class="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
@@ -229,6 +219,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {% if hsd_sua %}

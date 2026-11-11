@@ -164,10 +164,10 @@ def kiem_detail(request, ma):
         "chi_tiet": chi_tiet,
         "dong_lech": [ct for ct in chi_tiet if ct.co_chenh_lech],
         "bang_hsd": bang_hsd,
-        # bảng khai HSD hàng thừa chỉ hiện khi đã đếm xong và đang ở bước gửi duyệt
-        "hsd_sua": mode == "xem" and phieu.trang_thai == PhieuKiemKe.DANG_KIEM
+        # bảng khai HSD hàng thừa chỉ hiện với Quản trị viên, khi đã đếm xong và đang ở bước gửi duyệt;
+        # nhân viên gửi duyệt không nhập HSD → khi duyệt hàng thừa vào lô HSD cũ nhất
+        "hsd_sua": mode == "xem" and phieu.trang_thai == PhieuKiemKe.DANG_KIEM and user.is_admin
         and any(it["loai"] == "thua" for it in bang_hsd),
-        "chua_khai_hsd": [ct.id_sp.ten_sp for ct in chi_tiet if ct.can_khai_hsd and not ct.da_khai_hsd],
         "mode": mode,
         "an_he_thong": an_he_thong,
         "tong_thieu": tong_thieu,
@@ -208,7 +208,8 @@ def kiem_gui_duyet(request, ma):
     try:
         # hàng thừa: hsd_khong_<ct> + hsd_lydo_<ct>, hoặc các cặp (hsd_ngay_<ct>, hsd_sl_<ct>)
         khai_bao = {}
-        for ct in phieu.chi_tiet.select_related("id_sp"):
+        # nhân viên không nhập HSD hàng thừa: bỏ qua mọi dữ liệu HSD gửi lên
+        for ct in (phieu.chi_tiet.select_related("id_sp") if request.user.is_admin else ()):
             if request.POST.get(f"hsd_khong_{ct.pk}"):
                 khai_bao[ct.pk] = {"khong_hsd": True, "ly_do": request.POST.get(f"hsd_lydo_{ct.pk}", "")}
                 continue
@@ -225,7 +226,7 @@ def kiem_gui_duyet(request, ma):
                     raise NghiepVuError(f"{ct.id_sp.ten_sp}: hạn sử dụng không hợp lệ.")
                 dong.append((hsd, sl))
             khai_bao[ct.pk] = {"dong": dong}
-        gui_duyet(phieu, khai_bao)
+        gui_duyet(phieu, khai_bao, bat_buoc_hsd=request.user.is_admin)
         audit(request, "GUI_DUYET", "phieu_kiem_ke", ma)
         messages.success(request, f"Đã gửi phiếu {ma} cho Quản lý duyệt.")
     except NghiepVuError as e:
@@ -270,13 +271,13 @@ def kiem_dem_lai(request, ma):
     return redirect("kiem_detail", ma=ma)
 
 
+@admin_required
 @require_POST
 def kiem_huy(request, ma):
+    """Chỉ Quản trị viên được hủy phiếu kiểm kê; nhân viên không có quyền này."""
     phieu = get_object_or_404(PhieuKiemKe, pk=ma)
     if phieu.trang_thai not in (PhieuKiemKe.DANG_KIEM, PhieuKiemKe.BI_TU_CHOI):
         messages.error(request, "Chỉ hủy được phiếu đang kiểm hoặc bị từ chối.")
-    elif phieu.nguoi_tao_id != request.user.pk and not request.user.is_admin:
-        messages.error(request, "Chỉ người tạo phiếu hoặc Quản trị viên được hủy.")
     else:
         phieu.trang_thai = PhieuKiemKe.DA_HUY
         phieu.save(update_fields=["trang_thai"])
